@@ -84,8 +84,8 @@ if st.session_state.usuario_id is None:
 
 # Categorías predefinidas
 tipo_categorias = {
-    "ingreso": ["Sueldo", "Inversiones", "Ganancias", "Prestamos"],
-    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud"]}
+    "ingreso": ["Sueldo", "Inversiones", "Ganancias", "Prestamos", "Retornos"],
+    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym"]}
 
 tab1, tab2 = st.tabs(["Registros", "Estadisticas"])
 
@@ -103,9 +103,19 @@ with tab1:
 
 # Mostrar métricas
 with tab2:
-    st.subheader("📈 Resumen Financiero")
+    st.header("📈 Resumen Financiero")
     response = supabase.table("movimientos").select("tipo, valor, fecha, categoria").eq("usuario_id", st.session_state.usuario_id).execute()
     df = pd.DataFrame(response.data)
+
+    st.subheader("Registros")
+    registros = supabase.table("movimientos").select("fecha, tipo, categoria, valor, descripcion").eq("usuario_id", st.session_state.usuario_id).execute()
+    df_reg = pd.DataFrame(registros.data)
+
+    df_reg["fecha"] = pd.to_datetime(df_reg["fecha"]).dt.date
+
+    with st.expander("📄 Ver detalle de movimientos"):
+        st.dataframe(df_reg)
+
 
     if not df.empty:
         df["fecha"] = pd.to_datetime(df["fecha"])
@@ -142,10 +152,22 @@ with tab2:
         col5.metric("🗓️ Gastos de la Semana", f"${gastos_semana:,.2f}")
 
         # Tablas por categoría
-        st.subheader("📊 Tabla de Ingresos y Gastos por Categoría")
-        resumen_categoria = df.groupby(["tipo", "categoria"])["valor"].sum().reset_index()
-        resumen_pivot = resumen_categoria.pivot(index="categoria", columns="tipo", values="valor").fillna(0)
-        st.dataframe(resumen_pivot.style.format("${:,.2f}"))
+        st.subheader("📊 Gastos Totales por Categoría")
+
+        # Filtrar solo los gastos
+        df_gastos = df[df["tipo"] == "gasto"]
+
+        # Agrupar y sumar por categoría
+        gastos_categoria = df_gastos.groupby("categoria")["valor"].sum().reset_index()
+
+        # Formatear los valores con separador de miles y signo de moneda
+        gastos_categoria["valor"] = gastos_categoria["valor"].apply(lambda x: f"${x:,.2f}")
+
+        # Mostrar en Streamlit
+        st.dataframe(gastos_categoria)
+
+        
+
 
         # Gráficos
         col1, col2 = st.columns(2)
