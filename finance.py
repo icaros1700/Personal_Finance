@@ -111,15 +111,19 @@ with tab2:
         st.metric("💸 Total Gastos", f"${total_gastos:.2f}")
         st.metric("🔹 Balance", f"${balance:.2f}")
 
+        col1, col2 = st.columns(2)
+
         # Gráfico de gastos por categoría
-        fig = px.pie(df[df["tipo"] == "gasto"], names="categoria", values="valor", title="Gastos por Categoría")
-        st.plotly_chart(fig)
+        with col1:
+            fig = px.pie(df[df["tipo"] == "gasto"], names="categoria", values="valor", title="Gastos por Categoría")
+            st.plotly_chart(fig)
 
         # Gráfico de tendencias semanales
-        df["fecha"] = pd.to_datetime(df["fecha"])
-        df_weekly = df.groupby(pd.Grouper(key="fecha", freq="W"))["valor"].sum().reset_index()
-        fig2 = px.line(df_weekly, x="fecha", y="valor", title="Tendencia de Gastos")
-        st.plotly_chart(fig2)
+        with col2:
+            df["fecha"] = pd.to_datetime(df["fecha"])
+            df_weekly = df.groupby(pd.Grouper(key="fecha", freq="W"))["valor"].sum().reset_index()
+            fig2 = px.line(df_weekly, x="fecha", y="valor", title="Tendencia de Gastos")
+            st.plotly_chart(fig2)
     else:
         st.warning("No hay movimientos registrados.")
 
