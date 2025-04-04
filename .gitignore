@@ -1,0 +1,30 @@
+# Archivos de configuración de entorno
+.env
+.secrets.toml
+.streamlit/secrets.toml
+
+# Entornos virtuales
+venv/
+.env/
+.venv/
+ENV/
+
+# Archivos de Python compilados
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Archivos de logs y temporales
+*.log
+*.tmp
+*.swp
+
+# Archivos creados por el sistema o IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Jupyter notebooks temporales
+.ipynb_checkpoints/
