@@ -108,13 +108,13 @@ with tab2:
     df = pd.DataFrame(response.data)
 
     st.subheader("Registros")
-    registros = supabase.table("movimientos").select("fecha, tipo, categoria, valor, descripcion").eq("usuario_id", st.session_state.usuario_id).execute()
-    df_reg = pd.DataFrame(registros.data)
+    response = supabase.table("movimientos").select("fecha, tipo, categoria, valor, descripcion").eq("usuario_id", st.session_state.usuario_id).execute()
+    df_detalles = pd.DataFrame(response.data)
 
-    df_reg["fecha"] = pd.to_datetime(df_reg["fecha"]).dt.date
+    df_detalles["fecha"] = pd.to_datetime(df_detalles["fecha"]).dt.date
 
     with st.expander("📄 Ver detalle de movimientos"):
-        st.dataframe(df_reg)
+        st.dataframe(df_detalles)
 
 
     if not df.empty:
