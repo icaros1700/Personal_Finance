@@ -85,7 +85,7 @@ if st.session_state.usuario_id is None:
 # Categorías predefinidas
 tipo_categorias = {
     "ingreso": ["Sueldo", "Inversiones", "Ganancias", "Prestamos", "Retornos"],
-    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym"]}
+    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym", "Transporte"]}
 
 tab1, tab2 = st.tabs(["Registros", "Estadisticas"])
 
