@@ -11,6 +11,9 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Configuración inicial de la página
+st.set_page_config(page_title="Finanzas Personales", page_icon="💰", layout="wide")
+
 # Función para registrar usuarios
 def registrar_usuario(nombre, usuario, password):
     hashed_password = bcrypt.hash(password)
@@ -103,27 +106,63 @@ with tab2:
     st.subheader("📈 Resumen Financiero")
     response = supabase.table("movimientos").select("tipo, valor, fecha, categoria").eq("usuario_id", st.session_state.usuario_id).execute()
     df = pd.DataFrame(response.data)
+
     if not df.empty:
+        df["fecha"] = pd.to_datetime(df["fecha"])
         total_ingresos = df[df["tipo"] == "ingreso"]["valor"].sum()
         total_gastos = df[df["tipo"] == "gasto"]["valor"].sum()
         balance = total_ingresos - total_gastos
-        st.metric("💵 Total Ingresos", f"${total_ingresos:.2f}")
-        st.metric("💸 Total Gastos", f"${total_gastos:.2f}")
-        st.metric("🔹 Balance", f"${balance:.2f}")
 
+        # Métricas principales
+        col1, col2, col3 = st.columns(3)
+        col1.metric("💵 Total Ingresos", f"${total_ingresos:,.2f}")
+        col2.metric("💸 Total Gastos", f"${total_gastos:,.2f}")
+        col3.metric("🔹 Balance", f"${balance:,.2f}")
+
+        # Métricas del mes y semana actual
+        hoy = pd.Timestamp.today()
+        semana_actual = hoy.isocalendar().week
+        mes_actual = hoy.month
+        anio_actual = hoy.year
+
+        gastos_semana = df[
+            (df["tipo"] == "gasto") &
+            (df["fecha"].dt.isocalendar().week == semana_actual) &
+            (df["fecha"].dt.year == anio_actual)
+        ]["valor"].sum()
+
+        gastos_mes = df[
+            (df["tipo"] == "gasto") &
+            (df["fecha"].dt.month == mes_actual) &
+            (df["fecha"].dt.year == anio_actual)
+        ]["valor"].sum()
+
+        col4, col5 = st.columns(2)
+        col4.metric("📆 Gastos del Mes", f"${gastos_mes:,.2f}")
+        col5.metric("🗓️ Gastos de la Semana", f"${gastos_semana:,.2f}")
+
+        # Tablas por categoría
+        st.subheader("📊 Tabla de Ingresos y Gastos por Categoría")
+        resumen_categoria = df.groupby(["tipo", "categoria"])["valor"].sum().reset_index()
+        resumen_pivot = resumen_categoria.pivot(index="categoria", columns="tipo", values="valor").fillna(0)
+        st.dataframe(resumen_pivot.style.format("${:,.2f}"))
+
+        # Gráficos
         col1, col2 = st.columns(2)
 
-        # Gráfico de gastos por categoría
         with col1:
-            fig = px.pie(df[df["tipo"] == "gasto"], names="categoria", values="valor", title="Gastos por Categoría")
-            st.plotly_chart(fig)
+            gastos_por_categoria = df[df["tipo"] == "gasto"].groupby("categoria")["valor"].sum().reset_index()
+            fig = px.bar(gastos_por_categoria, x="categoria", y="valor", title="Gastos por Categoría", text_auto=True)
+            fig.update_layout(xaxis_title="Categoría", yaxis_title="Valor")
+            st.plotly_chart(fig, use_container_width=True)
 
-        # Gráfico de tendencias semanales
         with col2:
-            df["fecha"] = pd.to_datetime(df["fecha"])
-            df_weekly = df.groupby(pd.Grouper(key="fecha", freq="W"))["valor"].sum().reset_index()
-            fig2 = px.line(df_weekly, x="fecha", y="valor", title="Tendencia de Gastos")
-            st.plotly_chart(fig2)
+            df_gastos = df[df["tipo"] == "gasto"]
+            df_weekly = df_gastos.groupby(pd.Grouper(key="fecha", freq="W"))["valor"].sum().reset_index()
+            fig2 = px.line(df_weekly, x="fecha", y="valor", title="Tendencia Semanal de Gastos")
+            fig2.update_layout(xaxis_title="Semana", yaxis_title="Gastos")
+            st.plotly_chart(fig2, use_container_width=True)
+
     else:
         st.warning("No hay movimientos registrados.")
 
