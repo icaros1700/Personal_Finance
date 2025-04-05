@@ -34,14 +34,15 @@ def autenticar_usuario(usuario, password):
     return None
 
 # Función para registrar movimientos
-def registrar_movimiento(usuario_id, fecha, tipo, categoria, valor, descripcion):
+def registrar_movimiento(usuario_id, fecha, tipo, categoria, valor, descripcion, forma_pago):
     supabase.table("movimientos").insert({
         "usuario_id": usuario_id,
         "fecha": fecha.isoformat(),  # Convertir fecha a string ISO 8601
         "tipo": tipo,
         "categoria": categoria,
         "valor": valor,
-        "descripcion": descripcion
+        "descripcion": descripcion,
+        "forma_pago": forma_pago
     }).execute()
 
 # Interfaz en Streamlit
@@ -97,14 +98,15 @@ with tab1:
     categoria = st.selectbox("Categoría", tipo_categorias[tipo])
     valor = st.number_input("Valor", min_value=0.01, step=0.01)
     descripcion = st.text_input("Descripcion")
+    forma_pago = st.selectbox("Forma Pago", ["Efectivo","Tarjeta1", "Tarjeta2", "Tarjeta3", "Cuenta1", "Cuenta2", "Cuenta3"])
     if st.button("Guardar Movimiento"):
-        registrar_movimiento(st.session_state.usuario_id, fecha, tipo, categoria, valor, descripcion)
+        registrar_movimiento(st.session_state.usuario_id, fecha, tipo, categoria, valor, descripcion, forma_pago)
         st.success("Movimiento registrado correctamente")
 
 # Mostrar métricas
 with tab2:
     st.header("📈 Resumen Financiero")
-    response = supabase.table("movimientos").select("fecha, tipo, categoria, valor, descripcion").eq("usuario_id", st.session_state.usuario_id).execute()
+    response = supabase.table("movimientos").select("fecha, tipo, categoria, valor, descripcion, forma_pago").eq("usuario_id", st.session_state.usuario_id).execute()
     df = pd.DataFrame(response.data)
 
     detalles = df.copy()
@@ -172,8 +174,26 @@ with tab2:
 
         with col1:
             gastos_por_categoria = df[df["tipo"] == "gasto"].groupby("categoria")["valor"].sum().reset_index()
-            fig = px.bar(gastos_por_categoria, x="categoria", y="valor", title="Gastos por Categoría", text_auto=True)
-            fig.update_layout(xaxis_title="Categoría", yaxis_title="Valor")
+
+            fig = px.bar(
+            gastos_por_categoria,
+            x="categoria",
+            y="valor",
+            color="categoria",  # 🟢 Colores diferentes por categoría
+            title="Gastos por Categoría",
+            text_auto=True)
+
+            fig.update_layout(
+            xaxis_title="Categoría",
+            yaxis_title="Valor",
+            showlegend=False,  # 🔵 Oculta la leyenda si no la necesitas
+            plot_bgcolor='rgba(0,0,0,0)',  # Fondo del gráfico transparente
+            paper_bgcolor='rgba(0,0,0,0)',  # Fondo exterior transparente
+            font=dict(size=14),)
+
+            # Opcional: cambia el color de las barras manualmente
+            # fig.update_traces(marker_color=['#FF6361', '#58508D', '#FFA600'])
+
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -182,6 +202,33 @@ with tab2:
             fig2 = px.line(df_weekly, x="fecha", y="valor", title="Tendencia Semanal de Gastos")
             fig2.update_layout(xaxis_title="Semana", yaxis_title="Gastos")
             st.plotly_chart(fig2, use_container_width=True)
+        
+        col3, col4 = st.columns(2)
+
+        with col3:
+            gastos_por_forma = df[df["tipo"] == "gasto"].groupby("forma_pago")["valor"].sum().reset_index()
+
+            fig = px.bar(
+            gastos_por_forma,
+            x="forma_pago",
+            y="valor",
+            color="forma_pago",  # 🟢 Colores diferentes por categoría
+            title="Totales Forma Pago",
+            text_auto=True)
+
+            fig.update_layout(
+            xaxis_title="Forma de Pago",
+            yaxis_title="Valor",
+            showlegend=False,  # 🔵 Oculta la leyenda si no la necesitas
+            plot_bgcolor='rgba(0,0,0,0)',  # Fondo del gráfico transparente
+            paper_bgcolor='rgba(0,0,0,0)',  # Fondo exterior transparente
+            font=dict(size=14),)
+
+            # Opcional: cambia el color de las barras manualmente
+            # fig.update_traces(marker_color=['#FF6361', '#58508D', '#FFA600'])
+
+            st.plotly_chart(fig, use_container_width=True)
+
 
     else:
         st.warning("No hay movimientos registrados.")
