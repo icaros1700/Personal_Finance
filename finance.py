@@ -104,17 +104,15 @@ with tab1:
 # Mostrar métricas
 with tab2:
     st.header("📈 Resumen Financiero")
-    response = supabase.table("movimientos").select("tipo, valor, fecha, categoria").eq("usuario_id", st.session_state.usuario_id).execute()
+    response = supabase.table("movimientos").select("fecha, tipo, categoria, valor, descripcion").eq("usuario_id", st.session_state.usuario_id).execute()
     df = pd.DataFrame(response.data)
 
-    st.subheader("Registros")
-    response = supabase.table("movimientos").select("fecha, tipo, categoria, valor, descripcion").eq("usuario_id", st.session_state.usuario_id).execute()
-    df_detalles = pd.DataFrame(response.data)
+    detalles = df.copy()
 
-    df_detalles["fecha"] = pd.to_datetime(df_detalles["fecha"]).dt.date
+    detalles["fecha"] = pd.to_datetime(detalles["fecha"]).dt.date
 
     with st.expander("📄 Ver detalle de movimientos"):
-        st.dataframe(df_detalles)
+        st.dataframe(detalles)
 
 
     if not df.empty:
