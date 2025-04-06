@@ -94,17 +94,20 @@ tipo_categorias = {
 tab1, tab2 = st.tabs(["Registros", "Estadisticas"])
 
 # Formulario para registrar movimientos
+
 with tab1:
-    st.subheader("📊 Registrar Movimiento")
-    fecha = st.date_input("Fecha", value=datetime.date.today())
-    tipo = st.selectbox("Tipo", ["ingreso", "gasto"])
-    categoria = st.selectbox("Categoría", tipo_categorias[tipo])
-    valor = st.number_input("Valor", min_value=0.01, step=0.01)
-    descripcion = st.text_input("Descripcion")
-    forma_pago = st.selectbox("Forma Pago", ["Efectivo","Tarjeta1", "Tarjeta2", "Tarjeta3", "Cuenta1", "Cuenta2", "Cuenta3"])
-    if st.button("Guardar Movimiento"):
-        registrar_movimiento(st.session_state.usuario_id, fecha, tipo, categoria, valor, descripcion, forma_pago)
-        st.success("Movimiento registrado correctamente")
+    col4, col5, col6 = st.columns([1,2,1])
+    with col5:
+        st.subheader("📊 Registrar Movimiento")
+        fecha = st.date_input("Fecha", value=datetime.date.today())
+        tipo = st.selectbox("Tipo", ["ingreso", "gasto"])
+        categoria = st.selectbox("Categoría", tipo_categorias[tipo])
+        valor = st.number_input("Valor", min_value=0.01, step=0.01)
+        descripcion = st.text_input("Descripcion")
+        forma_pago = st.selectbox("Forma Pago", ["Efectivo","Tarjeta1", "Tarjeta2", "Tarjeta3", "Cuenta1", "Cuenta2", "Cuenta3"])
+        if st.button("Guardar Movimiento"):
+            registrar_movimiento(st.session_state.usuario_id, fecha, tipo, categoria, valor, descripcion, forma_pago)
+            st.success("Movimiento registrado correctamente")
 
 # Mostrar métricas
 with tab2:
