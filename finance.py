@@ -239,7 +239,22 @@ with tab2:
     else:
         st.warning("No hay movimientos registrados.")
 
+
+
 # Botón de cierre de sesión
 if st.button("Cerrar sesión"):
     st.session_state.usuario_id = None
     st.rerun()
+
+# Pie de página
+st.markdown(
+    """
+    <hr style="margin-top: 3rem; margin-bottom: 1rem;">
+    <div style="text-align: center;">
+        <p style="margin-top: 0.5rem; font-size: 0.9rem; color: gray;">
+            Personal Finance Develope for Everybody by William Ruiz © 2025
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
