@@ -46,42 +46,45 @@ def registrar_movimiento(usuario_id, fecha, tipo, categoria, valor, descripcion,
     }).execute()
 
 # Interfaz en Streamlit
-st.title("💰 Finanzas Personales")
+col1, col2, col3 = st.columns([1,2,1])
 
-# Manejo de sesión
-if "usuario_id" not in st.session_state:
-    st.session_state.usuario_id = None
+with col2:
+    st.title("💰 Finanzas Personales")
 
-# Mostrar opciones de login/registro solo si no hay sesión iniciada
-if st.session_state.usuario_id is None:
-    opcion = st.radio("Seleccione una opción", ["Iniciar sesión", "Registrarse"])
+    # Manejo de sesión
+    if "usuario_id" not in st.session_state:
+        st.session_state.usuario_id = None
 
-    if opcion == "Registrarse":
-        with st.form("register"):
-            nombre = st.text_input("Nombre Completo")
+    # Mostrar opciones de login/registro solo si no hay sesión iniciada
+    if st.session_state.usuario_id is None:
+        opcion = st.radio("Seleccione una opción", ["Iniciar sesión", "Registrarse"])
+
+        if opcion == "Registrarse":
+            with st.form("register"):
+                nombre = st.text_input("Nombre Completo")
+                usuario = st.text_input("Usuario")
+                password = st.text_input("Contraseña", type="password")
+                if st.form_submit_button("Registrarse"):
+                    response = registrar_usuario(nombre, usuario, password)
+                    if response and hasattr(response, "error") and response.error:
+                        st.error("Error al registrar usuario")
+                    else:
+                        st.success("Usuario registrado con éxito. Ahora puede iniciar sesión.")
+            st.stop()
+
+        # Formulario de autenticación
+        with st.form("login"):
             usuario = st.text_input("Usuario")
             password = st.text_input("Contraseña", type="password")
-            if st.form_submit_button("Registrarse"):
-                response = registrar_usuario(nombre, usuario, password)
-                if response and hasattr(response, "error") and response.error:
-                    st.error("Error al registrar usuario")
+            if st.form_submit_button("Iniciar sesión"):
+                user_id = autenticar_usuario(usuario, password)
+                if user_id:
+                    st.session_state.usuario_id = user_id
+                    st.success("Inicio de sesión exitoso")
+                    st.rerun()
                 else:
-                    st.success("Usuario registrado con éxito. Ahora puede iniciar sesión.")
+                    st.error("Credenciales incorrectas")
         st.stop()
-
-    # Formulario de autenticación
-    with st.form("login"):
-        usuario = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        if st.form_submit_button("Iniciar sesión"):
-            user_id = autenticar_usuario(usuario, password)
-            if user_id:
-                st.session_state.usuario_id = user_id
-                st.success("Inicio de sesión exitoso")
-                st.rerun()
-            else:
-                st.error("Credenciales incorrectas")
-    st.stop()
 
 # Categorías predefinidas
 tipo_categorias = {
