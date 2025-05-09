@@ -5,6 +5,10 @@ from passlib.hash import bcrypt
 import pandas as pd
 import plotly.express as px
 import datetime
+import os
+
+os.environ["STREAMLIT_WATCHDOG"] = "false"
+
 
 # Conexion supabase
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
