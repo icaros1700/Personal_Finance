@@ -256,14 +256,13 @@ with tab3:
     st.subheader("🏦 Presupuesto anual")
 
     # ── 1) Cargar movimientos en memoria (si aún no existen) ──
-    if "df_mov" not in st.session_state:
-        resp = supabase.table("movimientos")\
+    
+    resp = supabase.table("movimientos")\
             .select("fecha, tipo, categoria, valor")\
             .eq("usuario_id", st.session_state.usuario_id)\
             .execute()
-        st.session_state.df_mov = pd.DataFrame(resp.data)
+    df_mov = pd.DataFrame(resp.data)
 
-    df_mov = st.session_state.df_mov
     if df_mov.empty:
         st.info("Aún no hay movimientos registrados.")
         st.stop()
