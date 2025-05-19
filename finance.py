@@ -95,7 +95,7 @@ tipo_categorias = {
     "ingreso": ["Sueldo", "Inversiones", "Ganancias", "Prestamos", "Retornos"],
     "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym", "Transporte", "Servicios", "Regalos", "Ahorro", "Inversion"]}
 
-tab1, tab2 = st.tabs(["Registros", "Estadisticas", "Presupuesto"])
+tab1, tab2, tab3 = st.tabs(["Registros", "Estadisticas", "Presupuesto"])
 
 # Formulario para registrar movimientos
 
