@@ -252,6 +252,91 @@ with tab2:
     else:
         st.warning("No hay movimientos registrados.")
 
+with tab3:
+    st.subheader("🏦 Presupuesto anual")
+
+    # ── 1) Cargar movimientos en memoria (si aún no existen) ──
+    if "df_mov" not in st.session_state:
+        resp = supabase.table("movimientos")\
+            .select("fecha, tipo, categoria, valor")\
+            .eq("usuario_id", st.session_state.usuario_id)\
+            .execute()
+        st.session_state.df_mov = pd.DataFrame(resp.data)
+
+    df_mov = st.session_state.df_mov
+    if df_mov.empty:
+        st.info("Aún no hay movimientos registrados.")
+        st.stop()
+
+    # ── 2) Convertir fecha a datetime y obtener lista de años disponibles ──
+    df_mov["fecha"] = pd.to_datetime(df_mov["fecha"])
+    años_db = df_mov["fecha"].dt.year.sort_values().unique().tolist()
+
+    colanio, colvac = st.columns(2)
+    with colanio:
+        # El índice por defecto será el último (el año más reciente)
+        anio_sel = st.selectbox("Año", años_db, index=len(años_db) - 1)
+    
+    # --- Cargar / mostrar metas ---
+    meta_resp = supabase.table("presupuestos")\
+        .select("*")\
+        .eq("usuario_id", st.session_state.usuario_id)\
+        .eq("anio", anio_sel)\
+        .execute()
+
+    meta_data = meta_resp.data[0] if meta_resp.data else {}
+    ahorro_meta_val    = meta_data.get("ahorro_meta", 0)
+    inversion_meta_val = meta_data.get("inversion_meta", 0)
+
+    colformat, colvac = st.columns(2)
+
+    with colformat:
+
+        with st.form("form_meta"):
+            ahorro_meta = st.number_input("Meta anual de Ahorro",    0.0, value=float(ahorro_meta_val), step=100.0, format="%.2f")
+            inversion_meta = st.number_input("Meta anual de Inversión", 0.0, value=float(inversion_meta_val), step=100.0, format="%.2f")
+            submitted = st.form_submit_button("Guardar metas")
+            if submitted:
+                supabase.table("presupuestos").upsert({
+                    "usuario_id": st.session_state.usuario_id,
+                    "anio": anio_sel,
+                    "ahorro_meta": ahorro_meta,
+                    "inversion_meta": inversion_meta
+                }).execute()
+                st.success("Metas guardadas 👍")
+        # --- Movimientos del año seleccionado ---
+    if "df_mov" not in st.session_state:
+        resp = supabase.table("movimientos")\
+               .select("fecha, tipo, categoria, valor")\
+               .eq("usuario_id", st.session_state.usuario_id)\
+               .execute()
+        st.session_state.df_mov = pd.DataFrame(resp.data)
+
+    df_mov = st.session_state.df_mov
+    df_mov["fecha"] = pd.to_datetime(df_mov["fecha"])
+    df_anio = df_mov[df_mov["fecha"].dt.year == anio_sel]
+
+    ahorro_real    = df_anio[(df_anio["categoria"] == "Ahorro") &
+                             (df_anio["tipo"] == "ingreso")]["valor"].sum()
+    inversion_real = df_anio[(df_anio["categoria"] == "Inversion") &
+                             (df_anio["tipo"] == "ingreso")]["valor"].sum()
+
+    def pct(real, meta):
+        return 0 if meta == 0 else min(real / meta, 1)
+
+    pct_ahorro    = pct(ahorro_real, ahorro_meta)
+    pct_inversion = pct(inversion_real, inversion_meta)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Ahorro alcanzado", f"${ahorro_real:,.2f}",
+                  f"{pct_ahorro*100:.1f}% de la meta")
+        st.progress(pct_ahorro)
+    with col2:
+        st.metric("Inversión alcanzada", f"${inversion_real:,.2f}",
+                  f"{pct_inversion*100:.1f}% de la meta")
+        st.progress(pct_inversion)
+
 
 
 # Botón de cierre de sesión
@@ -269,5 +354,4 @@ st.markdown(
         </p>
     </div>
     """,
-    unsafe_allow_html=True
-)
+    unsafe_allow_html=True)
