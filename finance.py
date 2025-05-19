@@ -93,9 +93,9 @@ with col2:
 # Categorías predefinidas
 tipo_categorias = {
     "ingreso": ["Sueldo", "Inversiones", "Ganancias", "Prestamos", "Retornos"],
-    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym", "Transporte", "Servicios", "Regalos"]}
+    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym", "Transporte", "Servicios", "Regalos", "Ahorro", "Inversion"]}
 
-tab1, tab2 = st.tabs(["Registros", "Estadisticas"])
+tab1, tab2 = st.tabs(["Registros", "Estadisticas", "Presupuesto"])
 
 # Formulario para registrar movimientos
 
@@ -122,6 +122,13 @@ with tab2:
     detalles = df.copy()
 
     detalles["fecha"] = pd.to_datetime(detalles["fecha"]).dt.date
+
+    # --- Filtro por categoría ---
+    categorias = ["Todas"] + sorted(detalles["categoria"].dropna().unique().tolist())
+    categoria_sel = st.selectbox("Filtrar por categoría", categorias)
+
+    if categoria_sel != "Todas":
+        detalles = detalles[detalles["categoria"] == categoria_sel]
 
     with st.expander("📄 Ver detalle de movimientos"):
         st.dataframe(detalles)
