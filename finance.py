@@ -317,9 +317,9 @@ with tab3:
     df_anio = df_mov[df_mov["fecha"].dt.year == anio_sel]
 
     ahorro_real    = df_anio[(df_anio["categoria"] == "Ahorro") &
-                             (df_anio["tipo"] == "ingreso")]["valor"].sum()
+                             (df_anio["tipo"] == "gasto")]["valor"].sum()
     inversion_real = df_anio[(df_anio["categoria"] == "Inversion") &
-                             (df_anio["tipo"] == "ingreso")]["valor"].sum()
+                             (df_anio["tipo"] == "gasto")]["valor"].sum()
 
     def pct(real, meta):
         return 0 if meta == 0 else min(real / meta, 1)
