@@ -123,12 +123,14 @@ with tab2:
 
     detalles["fecha"] = pd.to_datetime(detalles["fecha"]).dt.date
 
-    # --- Filtro por categoría ---
-    categorias = ["Todas"] + sorted(detalles["categoria"].dropna().unique().tolist())
-    categoria_sel = st.selectbox("Filtrar por categoría", categorias)
+    colfil, colvac = st.columns(2)
+    with colfil:
+        # --- Filtro por categoría ---
+        categorias = ["Todas"] + sorted(detalles["categoria"].dropna().unique().tolist())
+        categoria_sel = st.selectbox("Filtrar por categoría", categorias)
 
-    if categoria_sel != "Todas":
-        detalles = detalles[detalles["categoria"] == categoria_sel]
+        if categoria_sel != "Todas":
+            detalles = detalles[detalles["categoria"] == categoria_sel]
 
     with st.expander("📄 Ver detalle de movimientos"):
         st.dataframe(detalles)
