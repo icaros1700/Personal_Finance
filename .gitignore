@@ -26,5 +26,18 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Jupyter notebooks temporales
+# Jupyter notebooks y checkpoints
+*.ipynb
 .ipynb_checkpoints/
+
+# Archivos de datos grandes
+*.csv
+*.xlsx
+*.json
+
+# Carpeta de datos (si tienes)
+data/
+datasets/
+notebooks/
+images/
+media/
