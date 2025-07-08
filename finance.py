@@ -1,3 +1,6 @@
+import os
+os.environ["STREAMLIT_WATCHDOG"] = "false"  
+
 import streamlit as st
 import psycopg2
 from supabase import create_client
@@ -5,9 +8,6 @@ from passlib.hash import bcrypt
 import pandas as pd
 import plotly.express as px
 import datetime
-import os
-
-os.environ["STREAMLIT_WATCHDOG"] = "false"
 
 
 # Conexion supabase
@@ -352,5 +352,4 @@ st.markdown(
             Personal Finance Develope for Everybody by William Ruiz © 2025
         </p>
     </div>
-    """,
-    unsafe_allow_html=True)
+    """,unsafe_allow_html=True)
