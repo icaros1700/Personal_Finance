@@ -253,36 +253,36 @@ with tab2:
 
         with col4:
 
-            # Filtrar gastos donde la categoría sea "bancos"
+            # Asegúrate de que la columna "fecha" esté en formato datetime
+            df["fecha"] = pd.to_datetime(df["fecha"])
+
+            # Filtrar solo los gastos de la categoría "bancos"
             gastos_bancos = df[(df["tipo"] == "gasto") & (df["categoria"] == "bancos")]
 
-            # Agrupar por forma de pago y sumar los valores
-            gastos_por_forma_bancos = gastos_bancos.groupby("forma_pago")["valor"].sum().reset_index()
+            # Crear una columna con el mes en formato "YYYY-MM"
+            gastos_bancos["mes"] = gastos_bancos["fecha"].dt.to_period("M").astype(str)
 
-            # Crear gráfico de barras
+            # Agrupar por mes y sumar los valores
+            gastos_por_mes = gastos_bancos.groupby("mes")["valor"].sum().reset_index()
+
+            # Crear gráfico
             fig = px.bar(
-                gastos_por_forma_bancos,
-                x="forma_pago",
+                gastos_por_mes,
+                x="mes",
                 y="valor",
-                color="forma_pago",  # Opcional: colores diferentes por forma de pago
-                title="Totales pago Bancos",
+                title="Gastos Mensuales - Categoría: Bancos",
                 text_auto=True)
 
-            # Estilizar el gráfico
+            # Estilizar
             fig.update_layout(
-                xaxis_title="Forma de Pago",
+                xaxis_title="Mes",
                 yaxis_title="Valor",
-                showlegend=False,
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(size=14),)
+                font=dict(size=14))
 
             # Mostrar en Streamlit
             st.plotly_chart(fig, use_container_width=True)
-
-            
-
-
 
     else:
         st.warning("No hay movimientos registrados.")
