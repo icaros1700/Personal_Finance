@@ -179,6 +179,9 @@ with tab2:
         # Agrupar y sumar por categoría
         gastos_categoria = df_gastos.groupby("categoria")["valor"].sum().reset_index()
 
+        # 🔽 Ordenar de mayor a menor antes de formatear
+        gastos_categoria = gastos_categoria.sort_values(by="valor", ascending=False)
+
         # Formatear los valores con separador de miles y signo de moneda
         gastos_categoria["valor"] = gastos_categoria["valor"].apply(lambda x: f"${x:,.2f}")
 
@@ -247,6 +250,38 @@ with tab2:
             # fig.update_traces(marker_color=['#FF6361', '#58508D', '#FFA600'])
 
             st.plotly_chart(fig, use_container_width=True)
+
+        with col4:
+
+            # Filtrar gastos donde la categoría sea "bancos"
+            gastos_bancos = df[(df["tipo"] == "gasto") & (df["categoria"] == "bancos")]
+
+            # Agrupar por forma de pago y sumar los valores
+            gastos_por_forma_bancos = gastos_bancos.groupby("forma_pago")["valor"].sum().reset_index()
+
+            # Crear gráfico de barras
+            fig = px.bar(
+                gastos_por_forma_bancos,
+                x="forma_pago",
+                y="valor",
+                color="forma_pago",  # Opcional: colores diferentes por forma de pago
+                title="Totales pago Bancos",
+                text_auto=True)
+
+            # Estilizar el gráfico
+            fig.update_layout(
+                xaxis_title="Forma de Pago",
+                yaxis_title="Valor",
+                showlegend=False,
+                plot_bgcolor='rgba(0,0,0,0)',
+                paper_bgcolor='rgba(0,0,0,0)',
+                font=dict(size=14),)
+
+            # Mostrar en Streamlit
+            st.plotly_chart(fig, use_container_width=True)
+
+            
+
 
 
     else:
