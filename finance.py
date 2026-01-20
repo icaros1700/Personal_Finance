@@ -149,7 +149,10 @@ with tab1:
         df_gest = pd.DataFrame(resp.data)
         
         if not df_gest.empty:
-            # Mostramos una tabla limpia
+            # --- MEJORA 3: LIMPIEZA DE FECHA ---
+            # Convertimos a datetime y extraemos solo la fecha (date) para quitar la hora
+            df_gest["fecha"] = pd.to_datetime(df_gest["fecha"]).dt.date
+
             st.dataframe(
                 df_gest[["fecha", "tipo", "categoria", "valor", "descripcion"]], 
                 use_container_width=True, 
@@ -179,7 +182,7 @@ with tab1:
             st.info("No hay movimientos recientes.")
 
 # --------------------------------------------------------------------------------
-# TAB 2: ESTADÍSTICAS (FILTROS Y KPIS)
+# TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS BANCOS Y SEMANAL)
 # --------------------------------------------------------------------------------
 with tab2:
     # 1. Cargar TODOS los datos
@@ -233,31 +236,57 @@ with tab2:
             tasa_ahorro = (balance / total_ing * 100) if total_ing > 0 else 0
             kpi4.metric("Tasa de Ahorro", f"{tasa_ahorro:.1f}%", help="% de ingresos retenidos.")
 
-            # --- GRÁFICOS ---
-            g_col1, g_col2 = st.columns([1, 2])
+            # --- GRÁFICOS FILA 1 ---
+            g_col1, g_col2 = st.columns([1, 1])
 
             with g_col1:
                 st.markdown("#### 🍩 Gastos por Categoría")
                 df_gas = df_filtered[df_filtered["tipo"] == "gasto"]
                 if not df_gas.empty:
-                    # CORRECCIÓN AQUÍ: Se usa px.pie con hole=0.4 en lugar de px.donut
                     fig_pie = px.pie(df_gas, values="valor", names="categoria", hole=0.4)
-                    fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                    fig_pie.update_layout(showlegend=False, margin=dict(t=30, b=0, l=0, r=0))
                     st.plotly_chart(fig_pie, use_container_width=True)
                 else:
                     st.info("Sin gastos.")
 
             with g_col2:
-                st.markdown("#### 📊 Flujo de Caja")
-                df_flow = df_filtered.groupby(["fecha", "tipo"])["valor"].sum().reset_index()
-                if not df_flow.empty:
-                    fig_bar = px.bar(df_flow, x="fecha", y="valor", color="tipo", 
-                                     color_discrete_map={"ingreso":"#2ECC71", "gasto":"#E74C3C"},
-                                     barmode='group')
-                    fig_bar.update_layout(margin=dict(t=0, b=0, l=0, r=0))
-                    st.plotly_chart(fig_bar, use_container_width=True)
+                # --- MEJORA 1: GRAFICO SOLO BANCOS ---
+                st.markdown("#### 🏦 Gastos en Bancos")
+                # Filtramos solo la categoría "Bancos" (aseguramos match de texto)
+                df_bancos = df_filtered[(df_filtered["tipo"] == "gasto") & (df_filtered["categoria"].isin(["Bancos", "bancos"]))]
+                
+                if not df_bancos.empty:
+                    # Agrupamos por fecha para ver qué día se gastó en bancos
+                    df_bancos_agg = df_bancos.groupby("fecha")["valor"].sum().reset_index()
+                    
+                    fig_banco = px.bar(df_bancos_agg, x="fecha", y="valor", 
+                                     title="Salidas categoría Bancos",
+                                     color_discrete_sequence=["#3498DB"]) # Azul corporativo
+                    fig_banco.update_layout(margin=dict(t=30, b=0, l=0, r=0))
+                    st.plotly_chart(fig_banco, use_container_width=True)
                 else:
-                    st.info("Sin datos suficientes.")
+                    st.info("¡Excelente! No hay gastos registrados en 'Bancos' para este periodo.")
+
+            st.divider()
+            
+            # --- MEJORA 2: GRÁFICO DE LÍNEA SEMANAL (FILA 2) ---
+            st.markdown("#### 📆 Tendencia de Gastos por Semana")
+            
+            df_gastos_all = df_filtered[df_filtered["tipo"] == "gasto"].copy()
+            if not df_gastos_all.empty:
+                # Agrupamos por el inicio de la semana
+                df_gastos_all["inicio_semana"] = df_gastos_all["fecha"].dt.to_period('W').dt.start_time
+                df_semanal = df_gastos_all.groupby("inicio_semana")["valor"].sum().reset_index()
+                
+                fig_line = px.line(df_semanal, x="inicio_semana", y="valor", markers=True, 
+                                   title="Evolución Semanal")
+                fig_line.update_traces(line_color='#E74C3C', line_width=3)
+                fig_line.update_layout(xaxis_title="Semana", yaxis_title="Total Gastado", 
+                                     margin=dict(t=30, b=0, l=0, r=0))
+                
+                st.plotly_chart(fig_line, use_container_width=True)
+            else:
+                st.info("No hay datos suficientes para la tendencia semanal.")
 
     else:
         st.info("Aún no tienes movimientos registrados.")
