@@ -181,7 +181,7 @@ with tab1:
             st.info("No hay movimientos recientes.")
 
 # --------------------------------------------------------------------------------
-# TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS BANCOS MENSUAL Y SEMANAL)
+# TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS Y RANKING FORMATEADO)
 # --------------------------------------------------------------------------------
 with tab2:
     # 1. Cargar TODOS los datos
@@ -249,15 +249,12 @@ with tab2:
                     st.info("Sin gastos.")
 
             with g_col2:
-                # --- MEJORA 1: GRAFICO BANCOS MENSUAL ---
+                # --- GRAFICO BANCOS MENSUAL ---
                 st.markdown("#### 🏦 Gastos en Bancos (Mensual)")
                 df_bancos = df_filtered[(df_filtered["tipo"] == "gasto") & (df_filtered["categoria"].isin(["Bancos", "bancos"]))]
                 
                 if not df_bancos.empty:
-                    # Creamos columna de Periodo (Año-Mes) para agrupar
                     df_bancos["periodo"] = df_bancos["fecha"].dt.strftime('%Y-%m')
-                    
-                    # Agrupamos por Periodo
                     df_bancos_agg = df_bancos.groupby("periodo")["valor"].sum().reset_index()
                     
                     fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor", 
@@ -277,7 +274,6 @@ with tab2:
                 st.markdown("#### 📆 Tendencia Semanal")
                 df_gastos_all = df_filtered[df_filtered["tipo"] == "gasto"].copy()
                 if not df_gastos_all.empty:
-                    # Agrupamos por inicio de semana
                     df_gastos_all["inicio_semana"] = df_gastos_all["fecha"].dt.to_period('W').dt.start_time
                     df_semanal = df_gastos_all.groupby("inicio_semana")["valor"].sum().reset_index()
                     
@@ -291,19 +287,21 @@ with tab2:
                     st.info("No hay datos.")
 
             with g_col4:
-                # --- MEJORA 2: DATAFRAME RANKING ---
+                # --- MEJORA: TABLA RANKING FORMATEADA CON MILES ---
                 st.markdown("#### 🏆 Top Gastos")
                 if not df_gastos_all.empty:
-                    # Agrupar por Categoría, sumar Valor, Ordenar descendente
+                    # 1. Agrupar y ordenar
                     df_ranking = df_gastos_all.groupby("categoria")["valor"].sum().reset_index().sort_values("valor", ascending=False)
                     
-                    # Formatear visualmente para que se vea bonito en la tabla
-                    # (Esto convierte a string, así que cuidado si quieres cálculos posteriores, pero para visualización es perfecto)
+                    # 2. Formatear para visualización (ESTA ES LA CLAVE DE TU PETICIÓN)
+                    # Creamos una columna visual que sea string con el formato "$1,234.56"
+                    df_ranking["Total"] = df_ranking["valor"].apply(lambda x: f"${x:,.2f}")
+                    
                     st.dataframe(
-                        df_ranking, 
+                        df_ranking[["categoria", "Total"]], # Solo mostramos las columnas necesarias
                         column_config={
                             "categoria": "Categoría",
-                            "valor": st.column_config.NumberColumn("Total ($)", format="$%.2f")
+                            "Total": "Monto Acumulado"
                         },
                         use_container_width=True,
                         hide_index=True
