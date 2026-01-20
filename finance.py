@@ -240,7 +240,8 @@ with tab2:
                 st.markdown("#### 🍩 Gastos por Categoría")
                 df_gas = df_filtered[df_filtered["tipo"] == "gasto"]
                 if not df_gas.empty:
-                    fig_pie = px.donut(df_gas, values="valor", names="categoria", hole=0.4)
+                    # CORRECCIÓN AQUÍ: Se usa px.pie con hole=0.4 en lugar de px.donut
+                    fig_pie = px.pie(df_gas, values="valor", names="categoria", hole=0.4)
                     fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
                     st.plotly_chart(fig_pie, use_container_width=True)
                 else:
@@ -314,78 +315,4 @@ with tab3:
             st.metric("Ahorro Real vs Meta", f"${real_ahorro:,.2f}", f"Meta: ${n_ahorro:,.2f}")
             st.progress(calc_pct(real_ahorro, n_ahorro))
         with col_m2:
-            st.metric("Inversión Real vs Meta", f"${real_inversion:,.2f}", f"Meta: ${n_inversion:,.2f}")
-            st.progress(calc_pct(real_inversion, n_inversion))
-
-# --------------------------------------------------------------------------------
-# TAB 4: PROYECCIÓN (FUTURO)
-# --------------------------------------------------------------------------------
-with tab4:
-    st.header("🔮 Proyección de Libertad Financiera")
-    st.markdown("Simula el crecimiento de tu patrimonio con interés compuesto.")
-
-    # 1. Calcular Capital Actual (Histórico)
-    resp_all = supabase.table("movimientos").select("categoria, valor").eq("usuario_id", st.session_state.usuario_id).execute()
-    df_all = pd.DataFrame(resp_all.data)
-    
-    capital_actual = 0.0
-    if not df_all.empty:
-        capital_actual = df_all[df_all["categoria"].isin(["Ahorro", "Inversion"])]["valor"].sum()
-    
-    col_proj_izq, col_proj_der = st.columns([1, 2])
-
-    with col_proj_izq:
-        st.markdown("### ⚙️ Parámetros")
-        st.info(f"💰 Capital Actual (Histórico): **${capital_actual:,.2f}**")
-        
-        edad_actual = st.number_input("Tu edad actual", min_value=18, max_value=90, value=30)
-        edad_retiro = st.number_input("Edad de retiro", min_value=edad_actual+1, max_value=100, value=60)
-        tasa_interes = 8.0 # Fijo al 8%
-        st.caption(f"Tasa de Interés anual (estimada): **{tasa_interes}%**")
-        
-        aporte_mensual = st.number_input("Aporte mensual extra (Opcional)", min_value=0.0, step=50.0)
-
-    with col_proj_der:
-        st.markdown("### 🚀 Resultados Estimados")
-        anos = edad_retiro - edad_actual
-        meses = anos * 12
-        tasa_mensual = (tasa_interes / 100) / 12
-        
-        if anos > 0:
-            # Cálculo Interés Compuesto con Aportes
-            vf_capital = capital_actual * ((1 + tasa_mensual) ** meses)
-            vf_aportes = 0
-            if aporte_mensual > 0:
-                vf_aportes = aporte_mensual * ( ((1 + tasa_mensual) ** meses - 1) / tasa_mensual )
-            
-            valor_futuro = vf_capital + vf_aportes
-            
-            st.metric(label=f"Capital a los {edad_retiro} años", value=f"${valor_futuro:,.2f}")
-            
-            ganancia_intereses = valor_futuro - (capital_actual + (aporte_mensual * meses))
-            st.success(f"¡Intereses generados: **${ganancia_intereses:,.2f}**!")
-
-            # Gráfico Proyección
-            data_points = []
-            saldo = capital_actual
-            for i in range(anos + 1):
-                data_points.append({"Edad": edad_actual + i, "Saldo": saldo})
-                # Interés anual simple para la gráfica
-                saldo = saldo * (1 + (tasa_interes/100)) + (aporte_mensual * 12)
-            
-            df_proj = pd.DataFrame(data_points)
-            
-            fig_proj = px.line(df_proj, x="Edad", y="Saldo", markers=True, title="Curva de Crecimiento Patrimonial")
-            fig_proj.update_traces(line_color="#FFD700", line_width=4)
-            fig_proj.update_layout(yaxis_tickformat="$,.0f")
-            st.plotly_chart(fig_proj, use_container_width=True)
-        else:
-            st.warning("Ajusta la edad de retiro.")
-
-# Pie de página
-st.markdown("""
-    <hr style="margin-top: 3rem; margin-bottom: 1rem;">
-    <div style="text-align: center; color: gray;">
-        <small>Personal Finance Developed for Everybody by William Ruiz © 2025</small>
-    </div>
-    """, unsafe_allow_html=True)
+            st.metric("Inversión Real vs Meta", f"${real_inversion:,.2f}", f"Meta: ${n_in
