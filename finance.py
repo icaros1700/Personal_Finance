@@ -115,7 +115,7 @@ with col_head2:
 tab1, tab2, tab3, tab4 = st.tabs(["📝 Gestión", "📈 Estadísticas", "🏦 Presupuesto", "🔮 Proyección"])
 
 # --------------------------------------------------------------------------------
-# TAB 1: GESTIÓN (REGISTRAR Y ELIMINAR)
+# TAB 1: GESTIÓN (REGISTRAR Y ELIMINAR) - CORREGIDO
 # --------------------------------------------------------------------------------
 with tab1:
     col_reg1, col_reg2 = st.columns([1, 2])
@@ -123,12 +123,18 @@ with tab1:
     # --- PARTE 1: EL FORMULARIO DE REGISTRO ---
     with col_reg1:
         st.subheader("➕ Nuevo")
+        
+        # 1. Selector de Tipo FUERA del form para actualización instantánea
+        tipo = st.radio("Tipo de Movimiento", ["ingreso", "gasto"], horizontal=True)
+        
+        # 2. Calculamos categorías basadas en la selección
+        cat_list = tipo_categorias.get(tipo, ["General"])
+
+        # 3. Formulario para el resto de datos
         with st.form("frm_movimiento", clear_on_submit=True):
             fecha = st.date_input("Fecha", value=datetime.date.today())
-            tipo = st.selectbox("Tipo", ["ingreso", "gasto"])
             
-            # Categorías dinámicas simples
-            cat_list = tipo_categorias.get(tipo, ["General"])
+            # El selectbox ahora usa la lista correcta
             categoria = st.selectbox("Categoría", cat_list)
             
             valor = st.number_input("Valor ($)", min_value=0.01, step=10.0)
@@ -155,7 +161,7 @@ with tab1:
             st.dataframe(
                 df_gest[["fecha", "tipo", "categoria", "valor", "descripcion"]], 
                 use_container_width=True, 
-                height=300,
+                height=350,
                 hide_index=True
             )
             
@@ -277,6 +283,9 @@ with tab2:
                     df_gastos_all["inicio_semana"] = df_gastos_all["fecha"].dt.to_period('W').dt.start_time
                     df_semanal = df_gastos_all.groupby("inicio_semana")["valor"].sum().reset_index()
                     
+                    # Convertir a string o timestamp para que plotly lo dibuje bien
+                    df_semanal["inicio_semana"] = df_semanal["inicio_semana"].dt.to_timestamp()
+                    
                     fig_line = px.line(df_semanal, x="inicio_semana", y="valor", markers=True)
                     fig_line.update_traces(line_color='#E74C3C', line_width=3)
                     fig_line.update_layout(xaxis_title="Semana", yaxis_title="Total Gastado", 
@@ -293,12 +302,11 @@ with tab2:
                     # 1. Agrupar y ordenar
                     df_ranking = df_gastos_all.groupby("categoria")["valor"].sum().reset_index().sort_values("valor", ascending=False)
                     
-                    # 2. Formatear para visualización (ESTA ES LA CLAVE DE TU PETICIÓN)
-                    # Creamos una columna visual que sea string con el formato "$1,234.56"
+                    # 2. Formatear para visualización
                     df_ranking["Total"] = df_ranking["valor"].apply(lambda x: f"${x:,.2f}")
                     
                     st.dataframe(
-                        df_ranking[["categoria", "Total"]], # Solo mostramos las columnas necesarias
+                        df_ranking[["categoria", "Total"]], 
                         column_config={
                             "categoria": "Categoría",
                             "Total": "Monto Acumulado"
