@@ -21,6 +21,13 @@ except Exception as e:
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Finanzas Personales Pro", page_icon="💰", layout="wide")
 
+# --- CATEGORÍAS MAESTRAS (GLOBAL) ---
+# Definimos esto al principio para que esté disponible en toda la app
+TIPO_CATEGORIAS = {
+    "ingreso": ["Sueldo", "Inversiones", "Ganancias", "Prestamos", "Retornos", "Otros Ingresos"],
+    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym", "Transporte", "Servicios", "Regalos", "Ahorro", "Inversion"]
+}
+
 # --- FUNCIONES DE BASE DE DATOS ---
 def registrar_usuario(nombre, usuario, password):
     hashed_password = bcrypt.hash(password)
@@ -96,12 +103,6 @@ if st.session_state.usuario_id is None:
 
 # --- APLICACIÓN PRINCIPAL (SOLO SI ESTÁ LOGUEADO) ---
 
-# Categorías Maestras
-tipo_categorias = {
-    "ingreso": ["Sueldo", "Inversiones", "Ganancias", "Prestamos", "Retornos", "Otros Ingresos"],
-    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym", "Transporte", "Servicios", "Regalos", "Ahorro", "Inversion"]
-}
-
 # Título y Logout
 col_head1, col_head2 = st.columns([4,1])
 with col_head1:
@@ -115,7 +116,7 @@ with col_head2:
 tab1, tab2, tab3, tab4 = st.tabs(["📝 Gestión", "📈 Estadísticas", "🏦 Presupuesto", "🔮 Proyección"])
 
 # --------------------------------------------------------------------------------
-# TAB 1: GESTIÓN (REGISTRAR Y ELIMINAR)
+# TAB 1: GESTIÓN (REGISTRAR Y ELIMINAR) - ARREGLADO
 # --------------------------------------------------------------------------------
 with tab1:
     col_reg1, col_reg2 = st.columns([1, 2])
@@ -124,19 +125,28 @@ with tab1:
     with col_reg1:
         st.subheader("➕ Nuevo")
         
-        # Selector de Tipo FUERA del form
-        tipo = st.radio("Tipo de Movimiento", ["ingreso", "gasto"], horizontal=True)
-        cat_list = tipo_categorias.get(tipo, ["General"])
+        # --- SOLUCIÓN DEL WIZ ---
+        # Sacamos Tipo y Categoría FUERA del st.form.
+        # Esto permite que la página se actualice instantáneamente al cambiar el Tipo.
+        
+        tipo_seleccionado = st.radio("Tipo", ["ingreso", "gasto"], horizontal=True, key="tipo_input")
+        
+        # Obtenemos la lista correcta inmediatamente
+        lista_categorias = TIPO_CATEGORIAS.get(tipo_seleccionado, ["General"])
+        
+        categoria_seleccionada = st.selectbox("Categoría", lista_categorias, key="cat_input")
 
+        # --- INICIO DEL FORMULARIO (Solo para los datos numéricos y botón) ---
         with st.form("frm_movimiento", clear_on_submit=True):
             fecha = st.date_input("Fecha", value=datetime.date.today())
-            categoria = st.selectbox("Categoría", cat_list)
+            
             valor = st.number_input("Valor ($)", min_value=0.01, step=10.0)
             descripcion = st.text_input("Descripción")
             forma_pago = st.selectbox("Pago", ["Efectivo", "Tarjeta Crédito", "Tarjeta Débito", "Transferencia"])
             
-            if st.form_submit_button("💾 Guardar"):
-                registrar_movimiento(st.session_state.usuario_id, fecha, tipo, categoria, valor, descripcion, forma_pago)
+            if st.form_submit_button("💾 Guardar Movimiento"):
+                # Usamos las variables de afuera (tipo y categoria) junto con las de adentro
+                registrar_movimiento(st.session_state.usuario_id, fecha, tipo_seleccionado, categoria_seleccionada, valor, descripcion, forma_pago)
                 st.toast("Movimiento guardado exitosamente!", icon="✅")
                 st.rerun() 
 
@@ -144,7 +154,6 @@ with tab1:
     with col_reg2:
         st.subheader("📝 Últimos Movimientos (Gestión)")
         
-        # Cargar últimos 20 movimientos
         resp = supabase.table("movimientos").select("*").eq("usuario_id", st.session_state.usuario_id).order("fecha", desc=True).limit(20).execute()
         df_gest = pd.DataFrame(resp.data)
         
@@ -179,10 +188,9 @@ with tab1:
             st.info("No hay movimientos recientes.")
 
 # --------------------------------------------------------------------------------
-# TAB 2: ESTADÍSTICAS (FILTROS Y GRÁFICOS CORREGIDOS)
+# TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS Y RANKING)
 # --------------------------------------------------------------------------------
 with tab2:
-    # 1. Cargar TODOS los datos
     response = supabase.table("movimientos").select("*").eq("usuario_id", st.session_state.usuario_id).execute()
     df = pd.DataFrame(response.data)
 
@@ -194,17 +202,13 @@ with tab2:
         meses_es = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
         df["mes"] = df["mes_num"].map(meses_es)
 
-        # --- FILTROS ---
         with st.container():
             col_tools1, col_tools2 = st.columns(2)
-            
             years_opt = ["Todos"] + sorted(df["año"].unique().tolist(), reverse=True)
             sel_year = col_tools1.selectbox("📅 Filtrar Año", years_opt)
-            
             months_opt = ["Todos"] + list(meses_es.values())
             sel_month = col_tools2.selectbox("📅 Filtrar Mes", months_opt)
 
-            # Lógica de Filtrado
             df_filtered = df.copy()
             if sel_year != "Todos":
                 df_filtered = df_filtered[df_filtered["año"] == sel_year]
@@ -217,7 +221,6 @@ with tab2:
         if df_filtered.empty:
             st.warning("No hay datos para el periodo seleccionado.")
         else:
-            # --- KPIs ---
             total_ing = df_filtered[df_filtered["tipo"] == "ingreso"]["valor"].sum()
             total_gas = df_filtered[df_filtered["tipo"] == "gasto"]["valor"].sum()
             balance = total_ing - total_gas
@@ -230,7 +233,6 @@ with tab2:
             tasa_ahorro = (balance / total_ing * 100) if total_ing > 0 else 0
             kpi4.metric("Tasa de Ahorro", f"{tasa_ahorro:.1f}%", help="% de ingresos retenidos.")
 
-            # --- GRÁFICOS FILA 1 ---
             g_col1, g_col2 = st.columns([1, 1])
 
             with g_col1:
@@ -246,40 +248,30 @@ with tab2:
             with g_col2:
                 st.markdown("#### 🏦 Gastos en Bancos (Mensual)")
                 df_bancos = df_filtered[(df_filtered["tipo"] == "gasto") & (df_filtered["categoria"].isin(["Bancos", "bancos"]))]
-                
                 if not df_bancos.empty:
                     df_bancos["periodo"] = df_bancos["fecha"].dt.strftime('%Y-%m')
                     df_bancos_agg = df_bancos.groupby("periodo")["valor"].sum().reset_index()
-                    
                     fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor", 
                                      title="Salidas categoría Bancos",
                                      color_discrete_sequence=["#3498DB"])
                     fig_banco.update_layout(margin=dict(t=30, b=0, l=0, r=0))
                     st.plotly_chart(fig_banco, use_container_width=True)
                 else:
-                    st.info("No hay gastos registrados en 'Bancos' para este periodo.")
+                    st.info("No hay gastos registrados en 'Bancos'.")
 
             st.divider()
             
-            # --- FILA 2: GRÁFICO SEMANAL Y TABLA RANKING ---
             g_col3, g_col4 = st.columns([2, 1])
 
             with g_col3:
                 st.markdown("#### 📆 Tendencia Semanal")
                 df_gastos_all = df_filtered[df_filtered["tipo"] == "gasto"].copy()
                 if not df_gastos_all.empty:
-                    # CORRECCIÓN DE ERROR AQUÍ:
-                    # Agrupamos por inicio de semana (esto ya devuelve timestamp)
                     df_gastos_all["inicio_semana"] = df_gastos_all["fecha"].dt.to_period('W').dt.start_time
                     df_semanal = df_gastos_all.groupby("inicio_semana")["valor"].sum().reset_index()
-                    
-                    # Eliminada la línea conflictiva: df_semanal["inicio_semana"].dt.to_timestamp()
-                    
                     fig_line = px.line(df_semanal, x="inicio_semana", y="valor", markers=True)
                     fig_line.update_traces(line_color='#E74C3C', line_width=3)
-                    fig_line.update_layout(xaxis_title="Semana", yaxis_title="Total Gastado", 
-                                         margin=dict(t=10, b=0, l=0, r=0))
-                    
+                    fig_line.update_layout(xaxis_title="Semana", yaxis_title="Total Gastado", margin=dict(t=10, b=0, l=0, r=0))
                     st.plotly_chart(fig_line, use_container_width=True)
                 else:
                     st.info("No hay datos.")
@@ -289,12 +281,10 @@ with tab2:
                 if not df_gastos_all.empty:
                     df_ranking = df_gastos_all.groupby("categoria")["valor"].sum().reset_index().sort_values("valor", ascending=False)
                     df_ranking["Total"] = df_ranking["valor"].apply(lambda x: f"${x:,.2f}")
-                    
                     st.dataframe(
                         df_ranking[["categoria", "Total"]], 
                         column_config={"categoria": "Categoría", "Total": "Monto Acumulado"},
-                        use_container_width=True,
-                        hide_index=True
+                        use_container_width=True, hide_index=True
                     )
                 else:
                     st.info("Sin datos.")
@@ -341,9 +331,7 @@ with tab3:
                     st.success("Metas actualizadas.")
                     st.rerun()
 
-        # Cálculos
         df_anio = df_mov[df_mov["fecha"].dt.year == anio_sel]
-        
         real_ahorro = df_anio[(df_anio["categoria"] == "Ahorro")]["valor"].sum()
         real_inversion = df_anio[(df_anio["categoria"] == "Inversion")]["valor"].sum()
         
@@ -365,7 +353,6 @@ with tab4:
     st.header("🔮 Proyección de Libertad Financiera")
     st.markdown("Simula el crecimiento de tu patrimonio con interés compuesto.")
 
-    # 1. Calcular Capital Actual (Histórico)
     resp_all = supabase.table("movimientos").select("categoria, valor").eq("usuario_id", st.session_state.usuario_id).execute()
     df_all = pd.DataFrame(resp_all.data)
     
@@ -378,12 +365,10 @@ with tab4:
     with col_proj_izq:
         st.markdown("### ⚙️ Parámetros")
         st.info(f"💰 Capital Actual (Histórico): **${capital_actual:,.2f}**")
-        
         edad_actual = st.number_input("Tu edad actual", min_value=18, max_value=90, value=30)
         edad_retiro = st.number_input("Edad de retiro", min_value=edad_actual+1, max_value=100, value=60)
-        tasa_interes = 8.0 # Fijo al 8%
-        st.caption(f"Tasa de Interés anual (estimada): **{tasa_interes}%**")
-        
+        tasa_interes = 8.0
+        st.caption(f"Tasa de Interés anual: **{tasa_interes}%**")
         aporte_mensual = st.number_input("Aporte mensual extra (Opcional)", min_value=0.0, step=50.0)
 
     with col_proj_der:
