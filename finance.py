@@ -115,7 +115,7 @@ with col_head2:
 tab1, tab2, tab3, tab4 = st.tabs(["📝 Gestión", "📈 Estadísticas", "🏦 Presupuesto", "🔮 Proyección"])
 
 # --------------------------------------------------------------------------------
-# TAB 1: GESTIÓN (REGISTRAR Y ELIMINAR) - CORREGIDO
+# TAB 1: GESTIÓN (REGISTRAR Y ELIMINAR)
 # --------------------------------------------------------------------------------
 with tab1:
     col_reg1, col_reg2 = st.columns([1, 2])
@@ -124,19 +124,13 @@ with tab1:
     with col_reg1:
         st.subheader("➕ Nuevo")
         
-        # 1. Selector de Tipo FUERA del form para actualización instantánea
+        # Selector de Tipo FUERA del form
         tipo = st.radio("Tipo de Movimiento", ["ingreso", "gasto"], horizontal=True)
-        
-        # 2. Calculamos categorías basadas en la selección
         cat_list = tipo_categorias.get(tipo, ["General"])
 
-        # 3. Formulario para el resto de datos
         with st.form("frm_movimiento", clear_on_submit=True):
             fecha = st.date_input("Fecha", value=datetime.date.today())
-            
-            # El selectbox ahora usa la lista correcta
             categoria = st.selectbox("Categoría", cat_list)
-            
             valor = st.number_input("Valor ($)", min_value=0.01, step=10.0)
             descripcion = st.text_input("Descripción")
             forma_pago = st.selectbox("Pago", ["Efectivo", "Tarjeta Crédito", "Tarjeta Débito", "Transferencia"])
@@ -155,7 +149,6 @@ with tab1:
         df_gest = pd.DataFrame(resp.data)
         
         if not df_gest.empty:
-            # Limpieza de fecha
             df_gest["fecha"] = pd.to_datetime(df_gest["fecha"]).dt.date
 
             st.dataframe(
@@ -169,7 +162,6 @@ with tab1:
             col_del1, col_del2 = st.columns([3, 1])
             
             with col_del1:
-                # Selector legible para borrar
                 opciones_borrar = {f"{row['fecha']} - {row['categoria']}: {row['descripcion']} (${row['valor']})": row['id'] for index, row in df_gest.iterrows()}
                 seleccion_borrar = st.selectbox("Selecciona para eliminar", list(opciones_borrar.keys()), label_visibility="collapsed")
             
@@ -187,7 +179,7 @@ with tab1:
             st.info("No hay movimientos recientes.")
 
 # --------------------------------------------------------------------------------
-# TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS Y RANKING FORMATEADO)
+# TAB 2: ESTADÍSTICAS (FILTROS Y GRÁFICOS CORREGIDOS)
 # --------------------------------------------------------------------------------
 with tab2:
     # 1. Cargar TODOS los datos
@@ -206,11 +198,9 @@ with tab2:
         with st.container():
             col_tools1, col_tools2 = st.columns(2)
             
-            # Filtro Año
             years_opt = ["Todos"] + sorted(df["año"].unique().tolist(), reverse=True)
             sel_year = col_tools1.selectbox("📅 Filtrar Año", years_opt)
             
-            # Filtro Mes
             months_opt = ["Todos"] + list(meses_es.values())
             sel_month = col_tools2.selectbox("📅 Filtrar Mes", months_opt)
 
@@ -237,7 +227,6 @@ with tab2:
             kpi2.metric("Gastos", f"${total_gas:,.2f}", delta="-Salidas", delta_color="inverse")
             kpi3.metric("Ahorro Neto", f"${balance:,.2f}", delta_color="normal" if balance >= 0 else "inverse")
             
-            # Tasa de Ahorro
             tasa_ahorro = (balance / total_ing * 100) if total_ing > 0 else 0
             kpi4.metric("Tasa de Ahorro", f"{tasa_ahorro:.1f}%", help="% de ingresos retenidos.")
 
@@ -255,7 +244,6 @@ with tab2:
                     st.info("Sin gastos.")
 
             with g_col2:
-                # --- GRAFICO BANCOS MENSUAL ---
                 st.markdown("#### 🏦 Gastos en Bancos (Mensual)")
                 df_bancos = df_filtered[(df_filtered["tipo"] == "gasto") & (df_filtered["categoria"].isin(["Bancos", "bancos"]))]
                 
@@ -280,11 +268,12 @@ with tab2:
                 st.markdown("#### 📆 Tendencia Semanal")
                 df_gastos_all = df_filtered[df_filtered["tipo"] == "gasto"].copy()
                 if not df_gastos_all.empty:
+                    # CORRECCIÓN DE ERROR AQUÍ:
+                    # Agrupamos por inicio de semana (esto ya devuelve timestamp)
                     df_gastos_all["inicio_semana"] = df_gastos_all["fecha"].dt.to_period('W').dt.start_time
                     df_semanal = df_gastos_all.groupby("inicio_semana")["valor"].sum().reset_index()
                     
-                    # Convertir a string o timestamp para que plotly lo dibuje bien
-                    df_semanal["inicio_semana"] = df_semanal["inicio_semana"].dt.to_timestamp()
+                    # Eliminada la línea conflictiva: df_semanal["inicio_semana"].dt.to_timestamp()
                     
                     fig_line = px.line(df_semanal, x="inicio_semana", y="valor", markers=True)
                     fig_line.update_traces(line_color='#E74C3C', line_width=3)
@@ -296,21 +285,14 @@ with tab2:
                     st.info("No hay datos.")
 
             with g_col4:
-                # --- MEJORA: TABLA RANKING FORMATEADA CON MILES ---
                 st.markdown("#### 🏆 Top Gastos")
                 if not df_gastos_all.empty:
-                    # 1. Agrupar y ordenar
                     df_ranking = df_gastos_all.groupby("categoria")["valor"].sum().reset_index().sort_values("valor", ascending=False)
-                    
-                    # 2. Formatear para visualización
                     df_ranking["Total"] = df_ranking["valor"].apply(lambda x: f"${x:,.2f}")
                     
                     st.dataframe(
                         df_ranking[["categoria", "Total"]], 
-                        column_config={
-                            "categoria": "Categoría",
-                            "Total": "Monto Acumulado"
-                        },
+                        column_config={"categoria": "Categoría", "Total": "Monto Acumulado"},
                         use_container_width=True,
                         hide_index=True
                     )
@@ -411,7 +393,6 @@ with tab4:
         tasa_mensual = (tasa_interes / 100) / 12
         
         if anos > 0:
-            # Cálculo Interés Compuesto con Aportes
             vf_capital = capital_actual * ((1 + tasa_mensual) ** meses)
             vf_aportes = 0
             if aporte_mensual > 0:
@@ -424,12 +405,10 @@ with tab4:
             ganancia_intereses = valor_futuro - (capital_actual + (aporte_mensual * meses))
             st.success(f"¡Intereses generados: **${ganancia_intereses:,.2f}**!")
 
-            # Gráfico Proyección
             data_points = []
             saldo = capital_actual
             for i in range(anos + 1):
                 data_points.append({"Edad": edad_actual + i, "Saldo": saldo})
-                # Interés anual simple para la gráfica
                 saldo = saldo * (1 + (tasa_interes/100)) + (aporte_mensual * 12)
             
             df_proj = pd.DataFrame(data_points)
