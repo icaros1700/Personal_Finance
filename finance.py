@@ -154,7 +154,7 @@ with tab1:
     with col_reg2:
         st.subheader("📝 Últimos Movimientos (Gestión)")
         
-        resp = supabase.table("movimientos").select("*").eq("usuario_id", st.session_state.usuario_id).order("fecha", desc=True).limit(20).execute()
+        resp = supabase.table("movimientos").select("*").eq("usuario_id", st.session_state.usuario_id).order("fecha", desc=True).execute()
         df_gest = pd.DataFrame(resp.data)
         
         if not df_gest.empty:
