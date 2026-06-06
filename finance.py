@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.express as px
 import datetime
 from supabase import create_client
+# pyrefly: ignore [missing-import]
 from passlib.hash import bcrypt
 
 # --- CONFIGURACIÓN SUPABASE ---
@@ -288,6 +289,26 @@ with tab2:
                     )
                 else:
                     st.info("Sin datos.")
+
+            st.divider()
+            
+            g_col5, g_col6 = st.columns([1, 1])
+
+            with g_col5:
+                st.markdown("#### Ingresos (Mensual)")
+                df_bancos = df_filtered[(df_filtered["tipo"] == "ingreso")]
+                if not df_bancos.empty:
+                    df_bancos["periodo"] = df_bancos["fecha"].dt.strftime('%Y-%m')
+                    df_bancos_agg = df_bancos.groupby("periodo")["valor"].sum().reset_index()
+                    fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor", 
+                                     title="Salidas categoría Ingresos",
+                                     color_discrete_sequence=["#3498DB"])
+                    fig_banco.update_layout(margin=dict(t=30, b=0, l=0, r=0))
+                    st.plotly_chart(fig_banco, use_container_width=True)
+                else:
+                    st.info("No hay ingresos registrados.")
+
+            
 
     else:
         st.info("Aún no tienes movimientos registrados.")
