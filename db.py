@@ -27,18 +27,27 @@ def restaurar_sesion(supabase):
 
 
 def registrar_usuario(supabase, nombre, email, password):
+    """Devuelve (exito: bool, cuenta_huerfana: bool)."""
     try:
         auth_response = supabase.auth.sign_up({"email": email, "password": password})
-        if not auth_response.user:
-            return None
+    except Exception:
+        return False, False
+
+    if not auth_response.user:
+        return False, False
+
+    try:
         supabase.table("usuarios").insert({
             "auth_id": auth_response.user.id,
             "nombre": nombre,
             "email": email
         }).execute()
-        return auth_response
+        return True, False
     except Exception:
-        return None
+        # La cuenta de acceso (auth.users) sí se creó, pero el perfil no.
+        # El usuario podrá autenticarse pero la app no encontrará su fila
+        # en `usuarios`; requiere intervención manual (ver migrations/).
+        return False, True
 
 
 def autenticar_usuario(supabase, email, password):
@@ -59,6 +68,8 @@ def cerrar_sesion(supabase):
     supabase.auth.sign_out()
     st.session_state.usuario_id = None
     st.session_state.sb_session = None
+    st.session_state.confirmar_borrado = None
+    st.session_state.pagina_gestion = 1
 
 
 def registrar_movimiento(supabase, auth_id, fecha, tipo, categoria, valor, descripcion, forma_pago):

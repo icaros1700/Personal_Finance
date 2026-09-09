@@ -46,9 +46,14 @@ if st.session_state.usuario_id is None:
                 email = st.text_input("Email")
                 password = st.text_input("Contraseña", type="password")
                 if st.form_submit_button("Crear Cuenta"):
-                    response = db.registrar_usuario(supabase, nombre, email, password)
-                    if response:
+                    exito, cuenta_huerfana = db.registrar_usuario(supabase, nombre, email, password)
+                    if exito:
                         st.success("¡Registro exitoso! Por favor inicia sesión.")
+                    elif cuenta_huerfana:
+                        st.error(
+                            "Tu cuenta de acceso se creó, pero hubo un problema guardando tu perfil. "
+                            "No vuelvas a registrarte con este email: contacta al administrador para completar el alta."
+                        )
                     else:
                         st.error("Error: El usuario ya existe o hubo un problema.")
 
@@ -181,11 +186,22 @@ with tab1:
 
             with col_del2:
                 if st.button("Eliminar ❌", type="primary"):
-                    if seleccion_borrar:
-                        id_a_borrar = opciones_mov[seleccion_borrar]
-                        if db.eliminar_movimiento(supabase, id_a_borrar):
+                    st.session_state.confirmar_borrado = seleccion_borrar
+
+            if st.session_state.get("confirmar_borrado"):
+                st.warning(f"¿Eliminar este registro? **{st.session_state.confirmar_borrado}**")
+                col_conf1, col_conf2 = st.columns(2)
+                with col_conf1:
+                    if st.button("✅ Sí, eliminar", type="primary"):
+                        id_a_borrar = opciones_mov.get(st.session_state.confirmar_borrado)
+                        st.session_state.confirmar_borrado = None
+                        if id_a_borrar and db.eliminar_movimiento(supabase, id_a_borrar):
                             st.toast("Registro eliminado.", icon="🗑️")
                             st.rerun()
+                with col_conf2:
+                    if st.button("Cancelar"):
+                        st.session_state.confirmar_borrado = None
+                        st.rerun()
         else:
             st.info("No hay movimientos recientes.")
 
