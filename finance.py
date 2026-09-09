@@ -103,6 +103,8 @@ with tab1:
 
         with st.form("frm_movimiento", clear_on_submit=True):
             fecha = st.date_input("Fecha", value=datetime.date.today())
+            if fecha > datetime.date.today():
+                st.caption("⚠️ La fecha es futura. Se guardará igual si continúas.")
             valor = st.number_input("Valor ($)", min_value=0.01, step=10.0)
             descripcion = st.text_input("Descripción")
             forma_pago = st.selectbox("Pago", FORMAS_PAGO)
@@ -175,6 +177,8 @@ with tab1:
                     e_tipo = st.radio("Tipo", ["ingreso", "gasto"], horizontal=True, index=["ingreso", "gasto"].index(mov_actual["tipo"]))
                     e_categoria = st.selectbox("Categoría", TIPO_CATEGORIAS.get(e_tipo, ["General"]))
                     e_fecha = st.date_input("Fecha", value=mov_actual["fecha"])
+                    if e_fecha > datetime.date.today():
+                        st.caption("⚠️ La fecha es futura. Se guardará igual si continúas.")
                     e_valor = st.number_input("Valor ($)", min_value=0.01, step=10.0, value=float(mov_actual["valor"]))
                     e_descripcion = st.text_input("Descripción", value=mov_actual["descripcion"])
                     e_forma_pago = st.selectbox("Pago", FORMAS_PAGO, index=FORMAS_PAGO.index(mov_actual["forma_pago"]) if mov_actual["forma_pago"] in FORMAS_PAGO else 0)
