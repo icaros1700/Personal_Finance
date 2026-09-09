@@ -1,6 +1,6 @@
 # Aplicación de Finanzas Personales
 
-Una aplicación web para gestionar finanzas personales, construida con Python, Streamlit y PostgreSQL.
+Una aplicación web para gestionar finanzas personales, construida con Python, Streamlit y Supabase (Postgres).
 
 ## Características
 
@@ -9,12 +9,14 @@ Una aplicación web para gestionar finanzas personales, construida con Python, S
 - 💰 Registro de ingresos y gastos
 - 📋 Múltiples categorías predefinidas
 - 📈 Visualización de datos históricos
+- 🎯 Presupuesto anual con metas de ahorro e inversión
+- 🔮 Proyección de patrimonio con interés compuesto
 - 🔒 Datos personalizados por usuario
 
 ## Requisitos
 
 - Python 3.8+
-- PostgreSQL
+- Una cuenta y proyecto en [Supabase](https://supabase.com) con las tablas `usuarios`, `movimientos` y `presupuestos`
 - Las dependencias listadas en `requirements.txt`
 
 ## Configuración
@@ -32,10 +34,10 @@ source venv/bin/activate  # En Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-
-3. Ejecutar la aplicación:
-```bash
-streamlit run finance.py
+3. Configurar las credenciales de Supabase en `.streamlit/secrets.toml` (este archivo no se sube a git):
+```toml
+SUPABASE_URL = "https://tu-proyecto.supabase.co"
+SUPABASE_KEY = "tu-clave-anon-o-service"
 ```
 
 4. Ejecutar la aplicación:
@@ -51,20 +53,16 @@ La aplicación está lista para ser desplegada en:
 - [Heroku](https://www.heroku.com)
 - [Railway](https://railway.app)
 
-Para la base de datos, se recomienda usar:
-- [Supabase](https://supabase.com)
-- [Railway PostgreSQL](https://railway.app)
-- [Heroku Postgres](https://www.heroku.com/postgres)
+La base de datos se gestiona en [Supabase](https://supabase.com); en el panel de despliegue hay que configurar `SUPABASE_URL` y `SUPABASE_KEY` como secretos (equivalentes al `.streamlit/secrets.toml` local).
 
 ## Estructura del Proyecto
 
 ```
-personal_finance_app/
-├── app.py              # Aplicación principal Streamlit
-├── init_db.py         # Inicialización de la base de datos
-├── requirements.txt   # Dependencias del proyecto
-├── .env              # Variables de entorno (no incluido en git)
-└── .gitignore        # Archivos ignorados por git
+finance_app/
+├── finance.py              # Aplicación principal Streamlit (login, dashboard, tabs)
+├── requirements.txt        # Dependencias del proyecto
+├── .streamlit/secrets.toml # Credenciales de Supabase (no incluido en git)
+└── .gitignore               # Archivos ignorados por git
 ```
 
 ## Licencia

@@ -23,6 +23,7 @@ __pycache__/
 # Archivos creados por el sistema o IDE
 .DS_Store
 Thumbs.db
+desktop.ini
 .vscode/
 .idea/
 
