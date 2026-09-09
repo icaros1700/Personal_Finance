@@ -1,14 +1,17 @@
 import os
+
 # Configuración para evitar errores en algunos entornos de despliegue
 os.environ["STREAMLIT_WATCHDOG"] = "false"
 
-import streamlit as st
-import pandas as pd
-import plotly.express as px
 import datetime
 
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+import calculos
 import db
-from config import TIPO_CATEGORIAS, FORMAS_PAGO, MESES_ES
+from config import FORMAS_PAGO, MESES_ES, TIPO_CATEGORIAS
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 # set_page_config debe ser el primer comando de Streamlit del script.
@@ -168,17 +171,13 @@ with tab2:
         if df_filtered.empty:
             st.warning("No hay datos para el periodo seleccionado.")
         else:
-            total_ing = df_filtered[df_filtered["tipo"] == "ingreso"]["valor"].sum()
-            total_gas = df_filtered[df_filtered["tipo"] == "gasto"]["valor"].sum()
-            balance = total_ing - total_gas
+            kpis = calculos.calcular_kpis(df_filtered)
 
             kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-            kpi1.metric("Ingresos", f"${total_ing:,.2f}", delta="Entradas")
-            kpi2.metric("Gastos", f"${total_gas:,.2f}", delta="-Salidas", delta_color="inverse")
-            kpi3.metric("Ahorro Neto", f"${balance:,.2f}", delta_color="normal" if balance >= 0 else "inverse")
-
-            tasa_ahorro = (balance / total_ing * 100) if total_ing > 0 else 0
-            kpi4.metric("Tasa de Ahorro", f"{tasa_ahorro:.1f}%", help="% de ingresos retenidos.")
+            kpi1.metric("Ingresos", f"${kpis['total_ingresos']:,.2f}", delta="Entradas")
+            kpi2.metric("Gastos", f"${kpis['total_gastos']:,.2f}", delta="-Salidas", delta_color="inverse")
+            kpi3.metric("Ahorro Neto", f"${kpis['balance']:,.2f}", delta_color="normal" if kpis['balance'] >= 0 else "inverse")
+            kpi4.metric("Tasa de Ahorro", f"{kpis['tasa_ahorro']:.1f}%", help="% de ingresos retenidos.")
 
             g_col1, g_col2 = st.columns([1, 1])
 
@@ -292,16 +291,13 @@ with tab3:
         real_ahorro = df_anio[(df_anio["categoria"] == "Ahorro")]["valor"].sum()
         real_inversion = df_anio[(df_anio["categoria"] == "Inversion")]["valor"].sum()
 
-        def calc_pct(real, meta):
-            return min(real/meta, 1.0) if meta > 0 else 0
-
         col_m1, col_m2 = st.columns(2)
         with col_m1:
             st.metric("Ahorro Real vs Meta", f"${real_ahorro:,.2f}", f"Meta: ${n_ahorro:,.2f}")
-            st.progress(calc_pct(real_ahorro, n_ahorro))
+            st.progress(calculos.calc_pct(real_ahorro, n_ahorro))
         with col_m2:
             st.metric("Inversión Real vs Meta", f"${real_inversion:,.2f}", f"Meta: ${n_inversion:,.2f}")
-            st.progress(calc_pct(real_inversion, n_inversion))
+            st.progress(calculos.calc_pct(real_inversion, n_inversion))
 
 # --------------------------------------------------------------------------------
 # TAB 4: PROYECCIÓN (FUTURO)
@@ -329,30 +325,13 @@ with tab4:
 
     with col_proj_der:
         st.markdown("### 🚀 Resultados Estimados")
-        anos = edad_retiro - edad_actual
-        meses = anos * 12
-        tasa_mensual = (tasa_interes / 100) / 12
+        proyeccion = calculos.proyectar_patrimonio(capital_actual, edad_actual, edad_retiro, tasa_interes, aporte_mensual)
 
-        if anos > 0:
-            vf_capital = capital_actual * ((1 + tasa_mensual) ** meses)
-            vf_aportes = 0
-            if aporte_mensual > 0:
-                vf_aportes = aporte_mensual * ( ((1 + tasa_mensual) ** meses - 1) / tasa_mensual )
+        if proyeccion:
+            st.metric(label=f"Capital a los {edad_retiro} años", value=f"${proyeccion['valor_futuro']:,.2f}")
+            st.success(f"¡Intereses generados: **${proyeccion['ganancia_intereses']:,.2f}**!")
 
-            valor_futuro = vf_capital + vf_aportes
-
-            st.metric(label=f"Capital a los {edad_retiro} años", value=f"${valor_futuro:,.2f}")
-
-            ganancia_intereses = valor_futuro - (capital_actual + (aporte_mensual * meses))
-            st.success(f"¡Intereses generados: **${ganancia_intereses:,.2f}**!")
-
-            data_points = []
-            saldo = capital_actual
-            for i in range(anos + 1):
-                data_points.append({"Edad": edad_actual + i, "Saldo": saldo})
-                saldo = saldo * (1 + (tasa_interes/100)) + (aporte_mensual * 12)
-
-            df_proj = pd.DataFrame(data_points)
+            df_proj = pd.DataFrame(proyeccion["curva"])
 
             fig_proj = px.line(df_proj, x="Edad", y="Saldo", markers=True, title="Curva de Crecimiento Patrimonial")
             fig_proj.update_traces(line_color="#FFD700", line_width=4)

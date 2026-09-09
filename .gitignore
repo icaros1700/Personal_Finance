@@ -15,6 +15,10 @@ __pycache__/
 *.pyo
 *.pyd
 
+# Cache de herramientas de desarrollo
+.pytest_cache/
+.ruff_cache/
+
 # Archivos de logs y temporales
 *.log
 *.tmp
