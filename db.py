@@ -78,6 +78,22 @@ def registrar_movimiento(supabase, auth_id, fecha, tipo, categoria, valor, descr
         return False
 
 
+def actualizar_movimiento(supabase, movimiento_id, fecha, tipo, categoria, valor, descripcion, forma_pago):
+    try:
+        supabase.table("movimientos").update({
+            "fecha": fecha.isoformat(),
+            "tipo": tipo,
+            "categoria": categoria,
+            "valor": valor,
+            "descripcion": descripcion,
+            "forma_pago": forma_pago
+        }).eq("id", movimiento_id).execute()
+        return True
+    except Exception as e:
+        st.error(f"No se pudo actualizar el movimiento: {e}")
+        return False
+
+
 def eliminar_movimiento(supabase, movimiento_id):
     try:
         supabase.table("movimientos").delete().eq("id", movimiento_id).execute()

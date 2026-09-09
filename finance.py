@@ -123,17 +123,38 @@ with tab1:
                 hide_index=True
             )
 
+            opciones_mov = {f"{row['fecha']} - {row['categoria']}: {row['descripcion']} (${row['valor']})": row['id'] for index, row in df_gest.iterrows()}
+
+            st.markdown("##### ✏️ Editar un registro")
+            seleccion_editar = st.selectbox("Selecciona para editar", list(opciones_mov.keys()), label_visibility="collapsed", key="sel_editar")
+
+            if seleccion_editar:
+                id_a_editar = opciones_mov[seleccion_editar]
+                mov_actual = df_gest[df_gest["id"] == id_a_editar].iloc[0]
+
+                with st.form("frm_editar_movimiento"):
+                    e_tipo = st.radio("Tipo", ["ingreso", "gasto"], horizontal=True, index=["ingreso", "gasto"].index(mov_actual["tipo"]))
+                    e_categoria = st.selectbox("Categoría", TIPO_CATEGORIAS.get(e_tipo, ["General"]))
+                    e_fecha = st.date_input("Fecha", value=mov_actual["fecha"])
+                    e_valor = st.number_input("Valor ($)", min_value=0.01, step=10.0, value=float(mov_actual["valor"]))
+                    e_descripcion = st.text_input("Descripción", value=mov_actual["descripcion"])
+                    e_forma_pago = st.selectbox("Pago", FORMAS_PAGO, index=FORMAS_PAGO.index(mov_actual["forma_pago"]) if mov_actual["forma_pago"] in FORMAS_PAGO else 0)
+
+                    if st.form_submit_button("💾 Guardar cambios"):
+                        if db.actualizar_movimiento(supabase, id_a_editar, e_fecha, e_tipo, e_categoria, e_valor, e_descripcion, e_forma_pago):
+                            st.toast("Movimiento actualizado.", icon="✏️")
+                            st.rerun()
+
             st.markdown("##### 🗑️ Eliminar un registro")
             col_del1, col_del2 = st.columns([3, 1])
 
             with col_del1:
-                opciones_borrar = {f"{row['fecha']} - {row['categoria']}: {row['descripcion']} (${row['valor']})": row['id'] for index, row in df_gest.iterrows()}
-                seleccion_borrar = st.selectbox("Selecciona para eliminar", list(opciones_borrar.keys()), label_visibility="collapsed")
+                seleccion_borrar = st.selectbox("Selecciona para eliminar", list(opciones_mov.keys()), label_visibility="collapsed", key="sel_borrar")
 
             with col_del2:
                 if st.button("Eliminar ❌", type="primary"):
                     if seleccion_borrar:
-                        id_a_borrar = opciones_borrar[seleccion_borrar]
+                        id_a_borrar = opciones_mov[seleccion_borrar]
                         if db.eliminar_movimiento(supabase, id_a_borrar):
                             st.toast("Registro eliminado.", icon="🗑️")
                             st.rerun()
