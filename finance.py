@@ -69,15 +69,20 @@ def autenticar_usuario(email, password):
     return None
 
 def registrar_movimiento(auth_id, fecha, tipo, categoria, valor, descripcion, forma_pago):
-    supabase.table("movimientos").insert({
-        "auth_id": auth_id,
-        "fecha": fecha.isoformat(),
-        "tipo": tipo,
-        "categoria": categoria,
-        "valor": valor,
-        "descripcion": descripcion,
-        "forma_pago": forma_pago
-    }).execute()
+    try:
+        supabase.table("movimientos").insert({
+            "auth_id": auth_id,
+            "fecha": fecha.isoformat(),
+            "tipo": tipo,
+            "categoria": categoria,
+            "valor": valor,
+            "descripcion": descripcion,
+            "forma_pago": forma_pago
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"No se pudo guardar el movimiento: {e}")
+        return False
 
 # --- GESTIÓN DE SESIÓN ---
 if "usuario_id" not in st.session_state:
@@ -166,16 +171,20 @@ with tab1:
             
             if st.form_submit_button("💾 Guardar Movimiento"):
                 # Usamos las variables de afuera (tipo y categoria) junto con las de adentro
-                registrar_movimiento(st.session_state.usuario_id, fecha, tipo_seleccionado, categoria_seleccionada, valor, descripcion, forma_pago)
-                st.toast("Movimiento guardado exitosamente!", icon="✅")
-                st.rerun() 
+                if registrar_movimiento(st.session_state.usuario_id, fecha, tipo_seleccionado, categoria_seleccionada, valor, descripcion, forma_pago):
+                    st.toast("Movimiento guardado exitosamente!", icon="✅")
+                    st.rerun()
 
     # --- PARTE 2: TABLA DE GESTIÓN (ELIMINAR) ---
     with col_reg2:
         st.subheader("📝 Últimos Movimientos (Gestión)")
         
-        resp = supabase.table("movimientos").select("*").eq("auth_id", st.session_state.usuario_id).order("fecha", desc=True).execute()
-        df_gest = pd.DataFrame(resp.data)
+        try:
+            resp = supabase.table("movimientos").select("*").eq("auth_id", st.session_state.usuario_id).order("fecha", desc=True).execute()
+            df_gest = pd.DataFrame(resp.data)
+        except Exception as e:
+            st.error(f"No se pudieron cargar los movimientos: {e}")
+            df_gest = pd.DataFrame()
         
         if not df_gest.empty:
             df_gest["fecha"] = pd.to_datetime(df_gest["fecha"]).dt.date
@@ -211,8 +220,12 @@ with tab1:
 # TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS Y RANKING)
 # --------------------------------------------------------------------------------
 with tab2:
-    response = supabase.table("movimientos").select("*").eq("auth_id", st.session_state.usuario_id).execute()
-    df = pd.DataFrame(response.data)
+    try:
+        response = supabase.table("movimientos").select("*").eq("auth_id", st.session_state.usuario_id).execute()
+        df = pd.DataFrame(response.data)
+    except Exception as e:
+        st.error(f"No se pudieron cargar los movimientos: {e}")
+        df = pd.DataFrame()
 
     if not df.empty:
         df["fecha"] = pd.to_datetime(df["fecha"])
@@ -338,8 +351,12 @@ with tab2:
 with tab3:
     st.subheader("🏦 Control de Metas")
     
-    resp = supabase.table("movimientos").select("fecha, tipo, categoria, valor").eq("auth_id", st.session_state.usuario_id).execute()
-    df_mov = pd.DataFrame(resp.data)
+    try:
+        resp = supabase.table("movimientos").select("fecha, tipo, categoria, valor").eq("auth_id", st.session_state.usuario_id).execute()
+        df_mov = pd.DataFrame(resp.data)
+    except Exception as e:
+        st.error(f"No se pudieron cargar los movimientos: {e}")
+        df_mov = pd.DataFrame()
 
     if df_mov.empty:
         st.info("Registra movimientos para configurar presupuestos.")
@@ -351,8 +368,12 @@ with tab3:
         with col_p1:
             anio_sel = st.selectbox("Configurar Año", años_db)
 
-        meta_resp = supabase.table("presupuestos").select("*").eq("auth_id", st.session_state.usuario_id).eq("anio", anio_sel).execute()
-        meta_data = meta_resp.data[0] if meta_resp.data else {}
+        try:
+            meta_resp = supabase.table("presupuestos").select("*").eq("auth_id", st.session_state.usuario_id).eq("anio", anio_sel).execute()
+            meta_data = meta_resp.data[0] if meta_resp.data else {}
+        except Exception as e:
+            st.error(f"No se pudieron cargar las metas de presupuesto: {e}")
+            meta_data = {}
 
         val_ahorro = meta_data.get("ahorro_meta", 0.0)
         val_inversion = meta_data.get("inversion_meta", 0.0)
@@ -362,14 +383,17 @@ with tab3:
                 n_ahorro = st.number_input("Meta Ahorro Anual", value=float(val_ahorro), step=100.0)
                 n_inversion = st.number_input("Meta Inversión Anual", value=float(val_inversion), step=100.0)
                 if st.form_submit_button("Actualizar Metas"):
-                    supabase.table("presupuestos").upsert({
-                        "auth_id": st.session_state.usuario_id,
-                        "anio": anio_sel,
-                        "ahorro_meta": n_ahorro,
-                        "inversion_meta": n_inversion
-                    }, on_conflict="auth_id,anio").execute()
-                    st.success("Metas actualizadas.")
-                    st.rerun()
+                    try:
+                        supabase.table("presupuestos").upsert({
+                            "auth_id": st.session_state.usuario_id,
+                            "anio": anio_sel,
+                            "ahorro_meta": n_ahorro,
+                            "inversion_meta": n_inversion
+                        }, on_conflict="auth_id,anio").execute()
+                        st.success("Metas actualizadas.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"No se pudieron actualizar las metas: {e}")
 
         df_anio = df_mov[df_mov["fecha"].dt.year == anio_sel]
         real_ahorro = df_anio[(df_anio["categoria"] == "Ahorro")]["valor"].sum()
@@ -393,8 +417,12 @@ with tab4:
     st.header("🔮 Proyección de Libertad Financiera")
     st.markdown("Simula el crecimiento de tu patrimonio con interés compuesto.")
 
-    resp_all = supabase.table("movimientos").select("categoria, valor").eq("auth_id", st.session_state.usuario_id).execute()
-    df_all = pd.DataFrame(resp_all.data)
+    try:
+        resp_all = supabase.table("movimientos").select("categoria, valor").eq("auth_id", st.session_state.usuario_id).execute()
+        df_all = pd.DataFrame(resp_all.data)
+    except Exception as e:
+        st.error(f"No se pudieron cargar los movimientos: {e}")
+        df_all = pd.DataFrame()
     
     capital_actual = 0.0
     if not df_all.empty:
