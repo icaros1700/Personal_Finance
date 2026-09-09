@@ -121,10 +121,16 @@ with tab1:
         if "pagina_gestion" not in st.session_state:
             st.session_state.pagina_gestion = 1
 
-        movimientos, total = db.obtener_movimientos_paginados(
-            supabase, st.session_state.usuario_id,
-            pagina=st.session_state.pagina_gestion, por_pagina=POR_PAGINA
-        )
+        busqueda = st.text_input("🔍 Buscar por descripción o categoría", key="busqueda_gestion")
+        if busqueda != st.session_state.get("busqueda_gestion_anterior", ""):
+            st.session_state.pagina_gestion = 1
+            st.session_state.busqueda_gestion_anterior = busqueda
+
+        with st.spinner("Cargando movimientos..."):
+            movimientos, total = db.obtener_movimientos_paginados(
+                supabase, st.session_state.usuario_id,
+                pagina=st.session_state.pagina_gestion, por_pagina=POR_PAGINA, busqueda=busqueda
+            )
         total_paginas = max((total + POR_PAGINA - 1) // POR_PAGINA, 1)
 
         # Si al eliminar quedó apuntando a una página que ya no existe, retrocedemos.
@@ -209,7 +215,8 @@ with tab1:
 # TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS Y RANKING)
 # --------------------------------------------------------------------------------
 with tab2:
-    df = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id))
+    with st.spinner("Cargando movimientos..."):
+        df = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id))
 
     if not df.empty:
         df["fecha"] = pd.to_datetime(df["fecha"])
@@ -327,7 +334,8 @@ with tab2:
 with tab3:
     st.subheader("🏦 Control de Metas")
 
-    df_mov = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id, columnas="fecha, tipo, categoria, valor"))
+    with st.spinner("Cargando movimientos..."):
+        df_mov = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id, columnas="fecha, tipo, categoria, valor"))
 
     if df_mov.empty:
         st.info("Registra movimientos para configurar presupuestos.")
@@ -371,7 +379,8 @@ with tab4:
     st.header("🔮 Proyección de Libertad Financiera")
     st.markdown("Simula el crecimiento de tu patrimonio con interés compuesto.")
 
-    df_all = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id, columnas="categoria, valor"))
+    with st.spinner("Cargando movimientos..."):
+        df_all = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id, columnas="categoria, valor"))
 
     capital_actual = 0.0
     if not df_all.empty:

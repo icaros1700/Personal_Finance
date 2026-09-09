@@ -70,6 +70,7 @@ def cerrar_sesion(supabase):
     st.session_state.sb_session = None
     st.session_state.confirmar_borrado = None
     st.session_state.pagina_gestion = 1
+    st.session_state.busqueda_gestion_anterior = ""
 
 
 def registrar_movimiento(supabase, auth_id, fecha, tipo, categoria, valor, descripcion, forma_pago):
@@ -126,14 +127,20 @@ def obtener_movimientos(supabase, auth_id, columnas="*", order_by_fecha=False):
         return []
 
 
-def obtener_movimientos_paginados(supabase, auth_id, pagina=1, por_pagina=50):
+def obtener_movimientos_paginados(supabase, auth_id, pagina=1, por_pagina=50, busqueda=""):
     try:
         inicio = (pagina - 1) * por_pagina
         fin = inicio + por_pagina - 1
-        resp = (
+        query = (
             supabase.table("movimientos")
             .select("*", count="exact")
             .eq("auth_id", auth_id)
+        )
+        if busqueda:
+            texto = busqueda.replace(",", " ").replace("%", "")
+            query = query.or_(f"descripcion.ilike.%{texto}%,categoria.ilike.%{texto}%")
+        resp = (
+            query
             .order("fecha", desc=True)
             .range(inicio, fin)
             .execute()
