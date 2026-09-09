@@ -104,6 +104,7 @@ with tab1:
 
             if st.form_submit_button("💾 Guardar Movimiento"):
                 if db.registrar_movimiento(supabase, st.session_state.usuario_id, fecha, tipo_seleccionado, categoria_seleccionada, valor, descripcion, forma_pago):
+                    st.session_state.pagina_gestion = 1
                     st.toast("Movimiento guardado exitosamente!", icon="✅")
                     st.rerun()
 
@@ -111,7 +112,22 @@ with tab1:
     with col_reg2:
         st.subheader("📝 Últimos Movimientos (Gestión)")
 
-        df_gest = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id, order_by_fecha=True))
+        POR_PAGINA = 50
+        if "pagina_gestion" not in st.session_state:
+            st.session_state.pagina_gestion = 1
+
+        movimientos, total = db.obtener_movimientos_paginados(
+            supabase, st.session_state.usuario_id,
+            pagina=st.session_state.pagina_gestion, por_pagina=POR_PAGINA
+        )
+        total_paginas = max((total + POR_PAGINA - 1) // POR_PAGINA, 1)
+
+        # Si al eliminar quedó apuntando a una página que ya no existe, retrocedemos.
+        if not movimientos and st.session_state.pagina_gestion > 1:
+            st.session_state.pagina_gestion = total_paginas
+            st.rerun()
+
+        df_gest = pd.DataFrame(movimientos)
 
         if not df_gest.empty:
             df_gest["fecha"] = pd.to_datetime(df_gest["fecha"]).dt.date
@@ -122,6 +138,18 @@ with tab1:
                 height=350,
                 hide_index=True
             )
+
+            col_pag1, col_pag2, col_pag3 = st.columns([1, 2, 1])
+            with col_pag1:
+                if st.button("⬅️ Anterior", disabled=st.session_state.pagina_gestion <= 1):
+                    st.session_state.pagina_gestion -= 1
+                    st.rerun()
+            with col_pag2:
+                st.markdown(f"<div style='text-align:center'>Página {st.session_state.pagina_gestion} de {total_paginas} ({total} movimientos)</div>", unsafe_allow_html=True)
+            with col_pag3:
+                if st.button("Siguiente ➡️", disabled=st.session_state.pagina_gestion >= total_paginas):
+                    st.session_state.pagina_gestion += 1
+                    st.rerun()
 
             opciones_mov = {f"{row['fecha']} - {row['categoria']}: {row['descripcion']} (${row['valor']})": row['id'] for index, row in df_gest.iterrows()}
 

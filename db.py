@@ -115,6 +115,24 @@ def obtener_movimientos(supabase, auth_id, columnas="*", order_by_fecha=False):
         return []
 
 
+def obtener_movimientos_paginados(supabase, auth_id, pagina=1, por_pagina=50):
+    try:
+        inicio = (pagina - 1) * por_pagina
+        fin = inicio + por_pagina - 1
+        resp = (
+            supabase.table("movimientos")
+            .select("*", count="exact")
+            .eq("auth_id", auth_id)
+            .order("fecha", desc=True)
+            .range(inicio, fin)
+            .execute()
+        )
+        return resp.data, resp.count or 0
+    except Exception as e:
+        st.error(f"No se pudieron cargar los movimientos: {e}")
+        return [], 0
+
+
 def obtener_meta_presupuesto(supabase, auth_id, anio):
     try:
         resp = supabase.table("presupuestos").select("*").eq("auth_id", auth_id).eq("anio", anio).execute()
