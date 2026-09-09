@@ -1,88 +1,27 @@
 import os
 # Configuración para evitar errores en algunos entornos de despliegue
-os.environ["STREAMLIT_WATCHDOG"] = "false"  
+os.environ["STREAMLIT_WATCHDOG"] = "false"
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import datetime
-from supabase import create_client
+
+import db
+from config import TIPO_CATEGORIAS, FORMAS_PAGO, MESES_ES
+
+# --- CONFIGURACIÓN DE PÁGINA ---
+# set_page_config debe ser el primer comando de Streamlit del script.
+st.set_page_config(page_title="Finanzas Personales Pro", page_icon="💰", layout="wide")
 
 # --- CONFIGURACIÓN SUPABASE ---
 try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    supabase = db.get_client()
 except Exception as e:
     st.error(f"Error configurando Supabase: {e}. Revisa tus secrets.")
     st.stop()
 
-# Streamlit recrea el cliente de Supabase en cada rerun, así que hay que
-# restaurar la sesión de auth manualmente o las queries viajan sin token
-# (RLS las rechaza en silencio, devolviendo 0 filas en vez de un error).
-if st.session_state.get("sb_session"):
-    try:
-        supabase.auth.set_session(
-            access_token=st.session_state.sb_session["access_token"],
-            refresh_token=st.session_state.sb_session["refresh_token"],
-        )
-    except Exception:
-        st.session_state.sb_session = None
-        st.session_state.usuario_id = None
-
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Finanzas Personales Pro", page_icon="💰", layout="wide")
-
-# --- CATEGORÍAS MAESTRAS (GLOBAL) ---
-# Definimos esto al principio para que esté disponible en toda la app
-TIPO_CATEGORIAS = {
-    "ingreso": ["Sueldo", "Inversiones", "Ganancias", "Prestamos", "Retornos", "Otros Ingresos"],
-    "gasto": ["Hogar", "Vehículo", "Alimentación", "Entretenimiento", "Bancos", "Salud", "Educacion", "Imprevistos", "Ropa", "Gym", "Transporte", "Servicios", "Regalos", "Ahorro", "Inversion"]
-}
-
-# --- FUNCIONES DE BASE DE DATOS ---
-def registrar_usuario(nombre, email, password):
-    try:
-        auth_response = supabase.auth.sign_up({"email": email, "password": password})
-        if not auth_response.user:
-            return None
-        supabase.table("usuarios").insert({
-            "auth_id": auth_response.user.id,
-            "nombre": nombre,
-            "email": email
-        }).execute()
-        return auth_response
-    except Exception:
-        return None
-
-def autenticar_usuario(email, password):
-    try:
-        auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        if auth_response.user and auth_response.session:
-            st.session_state.sb_session = {
-                "access_token": auth_response.session.access_token,
-                "refresh_token": auth_response.session.refresh_token,
-            }
-            return auth_response.user.id
-    except Exception:
-        pass
-    return None
-
-def registrar_movimiento(auth_id, fecha, tipo, categoria, valor, descripcion, forma_pago):
-    try:
-        supabase.table("movimientos").insert({
-            "auth_id": auth_id,
-            "fecha": fecha.isoformat(),
-            "tipo": tipo,
-            "categoria": categoria,
-            "valor": valor,
-            "descripcion": descripcion,
-            "forma_pago": forma_pago
-        }).execute()
-        return True
-    except Exception as e:
-        st.error(f"No se pudo guardar el movimiento: {e}")
-        return False
+db.restaurar_sesion(supabase)
 
 # --- GESTIÓN DE SESIÓN ---
 if "usuario_id" not in st.session_state:
@@ -104,7 +43,7 @@ if st.session_state.usuario_id is None:
                 email = st.text_input("Email")
                 password = st.text_input("Contraseña", type="password")
                 if st.form_submit_button("Crear Cuenta"):
-                    response = registrar_usuario(nombre, email, password)
+                    response = db.registrar_usuario(supabase, nombre, email, password)
                     if response:
                         st.success("¡Registro exitoso! Por favor inicia sesión.")
                     else:
@@ -115,7 +54,7 @@ if st.session_state.usuario_id is None:
                 email = st.text_input("Email")
                 password = st.text_input("Contraseña", type="password")
                 if st.form_submit_button("Ingresar"):
-                    user_id = autenticar_usuario(email, password)
+                    user_id = db.autenticar_usuario(supabase, email, password)
                     if user_id:
                         st.session_state.usuario_id = user_id
                         st.success("Bienvenido")
@@ -132,87 +71,69 @@ with col_head1:
     st.title("📊 Dashboard Financiero")
 with col_head2:
     if st.button("Cerrar Sesión"):
-        supabase.auth.sign_out()
-        st.session_state.usuario_id = None
-        st.session_state.sb_session = None
+        db.cerrar_sesion(supabase)
         st.rerun()
 
 # Pestañas
 tab1, tab2, tab3, tab4 = st.tabs(["📝 Gestión", "📈 Estadísticas", "🏦 Presupuesto", "🔮 Proyección"])
 
 # --------------------------------------------------------------------------------
-# TAB 1: GESTIÓN (REGISTRAR Y ELIMINAR) - ARREGLADO
+# TAB 1: GESTIÓN (REGISTRAR Y ELIMINAR)
 # --------------------------------------------------------------------------------
 with tab1:
     col_reg1, col_reg2 = st.columns([1, 2])
-    
+
     # --- PARTE 1: EL FORMULARIO DE REGISTRO ---
     with col_reg1:
         st.subheader("➕ Nuevo")
-        
-        # --- SOLUCIÓN DEL WIZ ---
-        # Sacamos Tipo y Categoría FUERA del st.form.
-        # Esto permite que la página se actualice instantáneamente al cambiar el Tipo.
-        
+
+        # Tipo y Categoría van FUERA del st.form para que la página se
+        # actualice instantáneamente al cambiar el Tipo.
         tipo_seleccionado = st.radio("Tipo", ["ingreso", "gasto"], horizontal=True, key="tipo_input")
-        
-        # Obtenemos la lista correcta inmediatamente
         lista_categorias = TIPO_CATEGORIAS.get(tipo_seleccionado, ["General"])
-        
         categoria_seleccionada = st.selectbox("Categoría", lista_categorias, key="cat_input")
 
-        # --- INICIO DEL FORMULARIO (Solo para los datos numéricos y botón) ---
         with st.form("frm_movimiento", clear_on_submit=True):
             fecha = st.date_input("Fecha", value=datetime.date.today())
-            
             valor = st.number_input("Valor ($)", min_value=0.01, step=10.0)
             descripcion = st.text_input("Descripción")
-            forma_pago = st.selectbox("Pago", ["Efectivo", "Tarjeta Crédito", "Tarjeta Débito", "Transferencia"])
-            
+            forma_pago = st.selectbox("Pago", FORMAS_PAGO)
+
             if st.form_submit_button("💾 Guardar Movimiento"):
-                # Usamos las variables de afuera (tipo y categoria) junto con las de adentro
-                if registrar_movimiento(st.session_state.usuario_id, fecha, tipo_seleccionado, categoria_seleccionada, valor, descripcion, forma_pago):
+                if db.registrar_movimiento(supabase, st.session_state.usuario_id, fecha, tipo_seleccionado, categoria_seleccionada, valor, descripcion, forma_pago):
                     st.toast("Movimiento guardado exitosamente!", icon="✅")
                     st.rerun()
 
     # --- PARTE 2: TABLA DE GESTIÓN (ELIMINAR) ---
     with col_reg2:
         st.subheader("📝 Últimos Movimientos (Gestión)")
-        
-        try:
-            resp = supabase.table("movimientos").select("*").eq("auth_id", st.session_state.usuario_id).order("fecha", desc=True).execute()
-            df_gest = pd.DataFrame(resp.data)
-        except Exception as e:
-            st.error(f"No se pudieron cargar los movimientos: {e}")
-            df_gest = pd.DataFrame()
-        
+
+        df_gest = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id, order_by_fecha=True))
+
         if not df_gest.empty:
             df_gest["fecha"] = pd.to_datetime(df_gest["fecha"]).dt.date
 
             st.dataframe(
-                df_gest[["fecha", "tipo", "categoria", "valor", "descripcion"]], 
-                use_container_width=True, 
+                df_gest[["fecha", "tipo", "categoria", "valor", "descripcion"]],
+                use_container_width=True,
                 height=350,
                 hide_index=True
             )
-            
+
             st.markdown("##### 🗑️ Eliminar un registro")
             col_del1, col_del2 = st.columns([3, 1])
-            
+
             with col_del1:
                 opciones_borrar = {f"{row['fecha']} - {row['categoria']}: {row['descripcion']} (${row['valor']})": row['id'] for index, row in df_gest.iterrows()}
                 seleccion_borrar = st.selectbox("Selecciona para eliminar", list(opciones_borrar.keys()), label_visibility="collapsed")
-            
+
             with col_del2:
                 if st.button("Eliminar ❌", type="primary"):
                     if seleccion_borrar:
                         id_a_borrar = opciones_borrar[seleccion_borrar]
-                        try:
-                            supabase.table("movimientos").delete().eq("id", id_a_borrar).execute()
+                        if db.eliminar_movimiento(supabase, id_a_borrar):
                             st.toast("Registro eliminado.", icon="🗑️")
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
         else:
             st.info("No hay movimientos recientes.")
 
@@ -220,35 +141,28 @@ with tab1:
 # TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS Y RANKING)
 # --------------------------------------------------------------------------------
 with tab2:
-    try:
-        response = supabase.table("movimientos").select("*").eq("auth_id", st.session_state.usuario_id).execute()
-        df = pd.DataFrame(response.data)
-    except Exception as e:
-        st.error(f"No se pudieron cargar los movimientos: {e}")
-        df = pd.DataFrame()
+    df = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id))
 
     if not df.empty:
         df["fecha"] = pd.to_datetime(df["fecha"])
         df["año"] = df["fecha"].dt.year
         df["mes_num"] = df["fecha"].dt.month
-        
-        meses_es = {1:"Enero", 2:"Febrero", 3:"Marzo", 4:"Abril", 5:"Mayo", 6:"Junio", 7:"Julio", 8:"Agosto", 9:"Septiembre", 10:"Octubre", 11:"Noviembre", 12:"Diciembre"}
-        df["mes"] = df["mes_num"].map(meses_es)
+        df["mes"] = df["mes_num"].map(MESES_ES)
 
         with st.container():
             col_tools1, col_tools2 = st.columns(2)
             years_opt = ["Todos"] + sorted(df["año"].unique().tolist(), reverse=True)
             sel_year = col_tools1.selectbox("📅 Filtrar Año", years_opt)
-            months_opt = ["Todos"] + list(meses_es.values())
+            months_opt = ["Todos"] + list(MESES_ES.values())
             sel_month = col_tools2.selectbox("📅 Filtrar Mes", months_opt)
 
             df_filtered = df.copy()
             if sel_year != "Todos":
                 df_filtered = df_filtered[df_filtered["año"] == sel_year]
             if sel_month != "Todos":
-                month_idx = [k for k, v in meses_es.items() if v == sel_month][0]
+                month_idx = [k for k, v in MESES_ES.items() if v == sel_month][0]
                 df_filtered = df_filtered[df_filtered["mes_num"] == month_idx]
-            
+
         st.divider()
 
         if df_filtered.empty:
@@ -262,7 +176,7 @@ with tab2:
             kpi1.metric("Ingresos", f"${total_ing:,.2f}", delta="Entradas")
             kpi2.metric("Gastos", f"${total_gas:,.2f}", delta="-Salidas", delta_color="inverse")
             kpi3.metric("Ahorro Neto", f"${balance:,.2f}", delta_color="normal" if balance >= 0 else "inverse")
-            
+
             tasa_ahorro = (balance / total_ing * 100) if total_ing > 0 else 0
             kpi4.metric("Tasa de Ahorro", f"{tasa_ahorro:.1f}%", help="% de ingresos retenidos.")
 
@@ -284,7 +198,7 @@ with tab2:
                 if not df_bancos.empty:
                     df_bancos["periodo"] = df_bancos["fecha"].dt.strftime('%Y-%m')
                     df_bancos_agg = df_bancos.groupby("periodo")["valor"].sum().reset_index()
-                    fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor", 
+                    fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor",
                                      title="Salidas categoría Bancos",
                                      color_discrete_sequence=["#3498DB"])
                     fig_banco.update_layout(margin=dict(t=30, b=0, l=0, r=0))
@@ -293,7 +207,7 @@ with tab2:
                     st.info("No hay gastos registrados en 'Bancos'.")
 
             st.divider()
-            
+
             g_col3, g_col4 = st.columns([2, 1])
 
             with g_col3:
@@ -315,7 +229,7 @@ with tab2:
                     df_ranking = df_gastos_all.groupby("categoria")["valor"].sum().reset_index().sort_values("valor", ascending=False)
                     df_ranking["Total"] = df_ranking["valor"].apply(lambda x: f"${x:,.2f}")
                     st.dataframe(
-                        df_ranking[["categoria", "Total"]], 
+                        df_ranking[["categoria", "Total"]],
                         column_config={"categoria": "Categoría", "Total": "Monto Acumulado"},
                         use_container_width=True, hide_index=True
                     )
@@ -323,7 +237,7 @@ with tab2:
                     st.info("Sin datos.")
 
             st.divider()
-            
+
             g_col5, g_col6 = st.columns([1, 1])
 
             with g_col5:
@@ -332,15 +246,13 @@ with tab2:
                 if not df_bancos.empty:
                     df_bancos["periodo"] = df_bancos["fecha"].dt.strftime('%Y-%m')
                     df_bancos_agg = df_bancos.groupby("periodo")["valor"].sum().reset_index()
-                    fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor", 
+                    fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor",
                                      title="Salidas categoría Ingresos",
                                      color_discrete_sequence=["#3498DB"])
                     fig_banco.update_layout(margin=dict(t=30, b=0, l=0, r=0))
                     st.plotly_chart(fig_banco, use_container_width=True)
                 else:
                     st.info("No hay ingresos registrados.")
-
-            
 
     else:
         st.info("Aún no tienes movimientos registrados.")
@@ -350,13 +262,8 @@ with tab2:
 # --------------------------------------------------------------------------------
 with tab3:
     st.subheader("🏦 Control de Metas")
-    
-    try:
-        resp = supabase.table("movimientos").select("fecha, tipo, categoria, valor").eq("auth_id", st.session_state.usuario_id).execute()
-        df_mov = pd.DataFrame(resp.data)
-    except Exception as e:
-        st.error(f"No se pudieron cargar los movimientos: {e}")
-        df_mov = pd.DataFrame()
+
+    df_mov = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id, columnas="fecha, tipo, categoria, valor"))
 
     if df_mov.empty:
         st.info("Registra movimientos para configurar presupuestos.")
@@ -368,13 +275,7 @@ with tab3:
         with col_p1:
             anio_sel = st.selectbox("Configurar Año", años_db)
 
-        try:
-            meta_resp = supabase.table("presupuestos").select("*").eq("auth_id", st.session_state.usuario_id).eq("anio", anio_sel).execute()
-            meta_data = meta_resp.data[0] if meta_resp.data else {}
-        except Exception as e:
-            st.error(f"No se pudieron cargar las metas de presupuesto: {e}")
-            meta_data = {}
-
+        meta_data = db.obtener_meta_presupuesto(supabase, st.session_state.usuario_id, anio_sel)
         val_ahorro = meta_data.get("ahorro_meta", 0.0)
         val_inversion = meta_data.get("inversion_meta", 0.0)
 
@@ -383,22 +284,14 @@ with tab3:
                 n_ahorro = st.number_input("Meta Ahorro Anual", value=float(val_ahorro), step=100.0)
                 n_inversion = st.number_input("Meta Inversión Anual", value=float(val_inversion), step=100.0)
                 if st.form_submit_button("Actualizar Metas"):
-                    try:
-                        supabase.table("presupuestos").upsert({
-                            "auth_id": st.session_state.usuario_id,
-                            "anio": anio_sel,
-                            "ahorro_meta": n_ahorro,
-                            "inversion_meta": n_inversion
-                        }, on_conflict="auth_id,anio").execute()
+                    if db.guardar_meta_presupuesto(supabase, st.session_state.usuario_id, anio_sel, n_ahorro, n_inversion):
                         st.success("Metas actualizadas.")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"No se pudieron actualizar las metas: {e}")
 
         df_anio = df_mov[df_mov["fecha"].dt.year == anio_sel]
         real_ahorro = df_anio[(df_anio["categoria"] == "Ahorro")]["valor"].sum()
         real_inversion = df_anio[(df_anio["categoria"] == "Inversion")]["valor"].sum()
-        
+
         def calc_pct(real, meta):
             return min(real/meta, 1.0) if meta > 0 else 0
 
@@ -417,17 +310,12 @@ with tab4:
     st.header("🔮 Proyección de Libertad Financiera")
     st.markdown("Simula el crecimiento de tu patrimonio con interés compuesto.")
 
-    try:
-        resp_all = supabase.table("movimientos").select("categoria, valor").eq("auth_id", st.session_state.usuario_id).execute()
-        df_all = pd.DataFrame(resp_all.data)
-    except Exception as e:
-        st.error(f"No se pudieron cargar los movimientos: {e}")
-        df_all = pd.DataFrame()
-    
+    df_all = pd.DataFrame(db.obtener_movimientos(supabase, st.session_state.usuario_id, columnas="categoria, valor"))
+
     capital_actual = 0.0
     if not df_all.empty:
         capital_actual = df_all[df_all["categoria"].isin(["Ahorro", "Inversion"])]["valor"].sum()
-    
+
     col_proj_izq, col_proj_der = st.columns([1, 2])
 
     with col_proj_izq:
@@ -444,17 +332,17 @@ with tab4:
         anos = edad_retiro - edad_actual
         meses = anos * 12
         tasa_mensual = (tasa_interes / 100) / 12
-        
+
         if anos > 0:
             vf_capital = capital_actual * ((1 + tasa_mensual) ** meses)
             vf_aportes = 0
             if aporte_mensual > 0:
                 vf_aportes = aporte_mensual * ( ((1 + tasa_mensual) ** meses - 1) / tasa_mensual )
-            
+
             valor_futuro = vf_capital + vf_aportes
-            
+
             st.metric(label=f"Capital a los {edad_retiro} años", value=f"${valor_futuro:,.2f}")
-            
+
             ganancia_intereses = valor_futuro - (capital_actual + (aporte_mensual * meses))
             st.success(f"¡Intereses generados: **${ganancia_intereses:,.2f}**!")
 
@@ -463,9 +351,9 @@ with tab4:
             for i in range(anos + 1):
                 data_points.append({"Edad": edad_actual + i, "Saldo": saldo})
                 saldo = saldo * (1 + (tasa_interes/100)) + (aporte_mensual * 12)
-            
+
             df_proj = pd.DataFrame(data_points)
-            
+
             fig_proj = px.line(df_proj, x="Edad", y="Saldo", markers=True, title="Curva de Crecimiento Patrimonial")
             fig_proj.update_traces(line_color="#FFD700", line_width=4)
             fig_proj.update_layout(yaxis_tickformat="$,.0f")
