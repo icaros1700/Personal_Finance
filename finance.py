@@ -7,8 +7,6 @@ import pandas as pd
 import plotly.express as px
 import datetime
 from supabase import create_client
-# pyrefly: ignore [missing-import]
-from passlib.hash import bcrypt
 
 # --- CONFIGURACIÓN SUPABASE ---
 try:
@@ -18,6 +16,19 @@ try:
 except Exception as e:
     st.error(f"Error configurando Supabase: {e}. Revisa tus secrets.")
     st.stop()
+
+# Streamlit recrea el cliente de Supabase en cada rerun, así que hay que
+# restaurar la sesión de auth manualmente o las queries viajan sin token
+# (RLS las rechaza en silencio, devolviendo 0 filas en vez de un error).
+if st.session_state.get("sb_session"):
+    try:
+        supabase.auth.set_session(
+            access_token=st.session_state.sb_session["access_token"],
+            refresh_token=st.session_state.sb_session["refresh_token"],
+        )
+    except Exception:
+        st.session_state.sb_session = None
+        st.session_state.usuario_id = None
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Finanzas Personales Pro", page_icon="💰", layout="wide")
@@ -30,32 +41,36 @@ TIPO_CATEGORIAS = {
 }
 
 # --- FUNCIONES DE BASE DE DATOS ---
-def registrar_usuario(nombre, usuario, password):
-    hashed_password = bcrypt.hash(password)
+def registrar_usuario(nombre, email, password):
     try:
-        response = supabase.table("usuarios").insert({
+        auth_response = supabase.auth.sign_up({"email": email, "password": password})
+        if not auth_response.user:
+            return None
+        supabase.table("usuarios").insert({
+            "auth_id": auth_response.user.id,
             "nombre": nombre,
-            "usuario": usuario,
-            "password": hashed_password
+            "email": email
         }).execute()
-        return response
-    except Exception as e:
+        return auth_response
+    except Exception:
         return None
 
-def autenticar_usuario(usuario, password):
+def autenticar_usuario(email, password):
     try:
-        response = supabase.table("usuarios").select("id, password").eq("usuario", usuario).execute()
-        if response.data:
-            stored_password = response.data[0]["password"]
-            if bcrypt.verify(password, stored_password):
-                return response.data[0]["id"]
-    except Exception as e:
+        auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        if auth_response.user and auth_response.session:
+            st.session_state.sb_session = {
+                "access_token": auth_response.session.access_token,
+                "refresh_token": auth_response.session.refresh_token,
+            }
+            return auth_response.user.id
+    except Exception:
         pass
     return None
 
-def registrar_movimiento(usuario_id, fecha, tipo, categoria, valor, descripcion, forma_pago):
+def registrar_movimiento(auth_id, fecha, tipo, categoria, valor, descripcion, forma_pago):
     supabase.table("movimientos").insert({
-        "usuario_id": usuario_id,
+        "auth_id": auth_id,
         "fecha": fecha.isoformat(),
         "tipo": tipo,
         "categoria": categoria,
@@ -67,6 +82,8 @@ def registrar_movimiento(usuario_id, fecha, tipo, categoria, valor, descripcion,
 # --- GESTIÓN DE SESIÓN ---
 if "usuario_id" not in st.session_state:
     st.session_state.usuario_id = None
+if "sb_session" not in st.session_state:
+    st.session_state.sb_session = None
 
 # --- PANTALLA DE LOGIN / REGISTRO ---
 if st.session_state.usuario_id is None:
@@ -79,10 +96,10 @@ if st.session_state.usuario_id is None:
         if opcion == "Registrarse":
             with st.form("register"):
                 nombre = st.text_input("Nombre Completo")
-                usuario = st.text_input("Usuario")
+                email = st.text_input("Email")
                 password = st.text_input("Contraseña", type="password")
                 if st.form_submit_button("Crear Cuenta"):
-                    response = registrar_usuario(nombre, usuario, password)
+                    response = registrar_usuario(nombre, email, password)
                     if response:
                         st.success("¡Registro exitoso! Por favor inicia sesión.")
                     else:
@@ -90,10 +107,10 @@ if st.session_state.usuario_id is None:
 
         else: # Login
             with st.form("login"):
-                usuario = st.text_input("Usuario")
+                email = st.text_input("Email")
                 password = st.text_input("Contraseña", type="password")
                 if st.form_submit_button("Ingresar"):
-                    user_id = autenticar_usuario(usuario, password)
+                    user_id = autenticar_usuario(email, password)
                     if user_id:
                         st.session_state.usuario_id = user_id
                         st.success("Bienvenido")
@@ -110,7 +127,9 @@ with col_head1:
     st.title("📊 Dashboard Financiero")
 with col_head2:
     if st.button("Cerrar Sesión"):
+        supabase.auth.sign_out()
         st.session_state.usuario_id = None
+        st.session_state.sb_session = None
         st.rerun()
 
 # Pestañas
@@ -155,7 +174,7 @@ with tab1:
     with col_reg2:
         st.subheader("📝 Últimos Movimientos (Gestión)")
         
-        resp = supabase.table("movimientos").select("*").eq("usuario_id", st.session_state.usuario_id).order("fecha", desc=True).execute()
+        resp = supabase.table("movimientos").select("*").eq("auth_id", st.session_state.usuario_id).order("fecha", desc=True).execute()
         df_gest = pd.DataFrame(resp.data)
         
         if not df_gest.empty:
@@ -192,7 +211,7 @@ with tab1:
 # TAB 2: ESTADÍSTICAS (FILTROS, GRAFICOS Y RANKING)
 # --------------------------------------------------------------------------------
 with tab2:
-    response = supabase.table("movimientos").select("*").eq("usuario_id", st.session_state.usuario_id).execute()
+    response = supabase.table("movimientos").select("*").eq("auth_id", st.session_state.usuario_id).execute()
     df = pd.DataFrame(response.data)
 
     if not df.empty:
@@ -319,22 +338,22 @@ with tab2:
 with tab3:
     st.subheader("🏦 Control de Metas")
     
-    resp = supabase.table("movimientos").select("fecha, tipo, categoria, valor").eq("usuario_id", st.session_state.usuario_id).execute()
+    resp = supabase.table("movimientos").select("fecha, tipo, categoria, valor").eq("auth_id", st.session_state.usuario_id).execute()
     df_mov = pd.DataFrame(resp.data)
-    
+
     if df_mov.empty:
         st.info("Registra movimientos para configurar presupuestos.")
     else:
         df_mov["fecha"] = pd.to_datetime(df_mov["fecha"])
         años_db = sorted(df_mov["fecha"].dt.year.unique().tolist(), reverse=True)
-        
+
         col_p1, col_p2 = st.columns(2)
         with col_p1:
             anio_sel = st.selectbox("Configurar Año", años_db)
-        
-        meta_resp = supabase.table("presupuestos").select("*").eq("usuario_id", st.session_state.usuario_id).eq("anio", anio_sel).execute()
+
+        meta_resp = supabase.table("presupuestos").select("*").eq("auth_id", st.session_state.usuario_id).eq("anio", anio_sel).execute()
         meta_data = meta_resp.data[0] if meta_resp.data else {}
-        
+
         val_ahorro = meta_data.get("ahorro_meta", 0.0)
         val_inversion = meta_data.get("inversion_meta", 0.0)
 
@@ -344,11 +363,11 @@ with tab3:
                 n_inversion = st.number_input("Meta Inversión Anual", value=float(val_inversion), step=100.0)
                 if st.form_submit_button("Actualizar Metas"):
                     supabase.table("presupuestos").upsert({
-                        "usuario_id": st.session_state.usuario_id,
+                        "auth_id": st.session_state.usuario_id,
                         "anio": anio_sel,
                         "ahorro_meta": n_ahorro,
                         "inversion_meta": n_inversion
-                    }).execute()
+                    }, on_conflict="auth_id,anio").execute()
                     st.success("Metas actualizadas.")
                     st.rerun()
 
@@ -374,7 +393,7 @@ with tab4:
     st.header("🔮 Proyección de Libertad Financiera")
     st.markdown("Simula el crecimiento de tu patrimonio con interés compuesto.")
 
-    resp_all = supabase.table("movimientos").select("categoria, valor").eq("usuario_id", st.session_state.usuario_id).execute()
+    resp_all = supabase.table("movimientos").select("categoria, valor").eq("auth_id", st.session_state.usuario_id).execute()
     df_all = pd.DataFrame(resp_all.data)
     
     capital_actual = 0.0
