@@ -255,77 +255,75 @@ with tab2:
             kpi3.metric("Ahorro Neto", f"${kpis['balance']:,.2f}", delta_color="normal" if kpis['balance'] >= 0 else "inverse")
             kpi4.metric("Tasa de Ahorro", f"{kpis['tasa_ahorro']:.1f}%", help="% de ingresos retenidos.")
 
-            g_col1, g_col2 = st.columns([1, 1])
+            sub_gastos, sub_tendencias, sub_ingresos = st.tabs(["💸 Gastos", "📆 Tendencias", "💰 Ingresos"])
 
-            with g_col1:
-                st.markdown("#### 🍩 Gastos por Categoría")
-                df_gas = df_filtered[df_filtered["tipo"] == "gasto"]
-                if not df_gas.empty:
-                    fig_pie = px.pie(df_gas, values="valor", names="categoria", hole=0.4)
-                    fig_pie.update_layout(showlegend=False, margin=dict(t=30, b=0, l=0, r=0))
-                    st.plotly_chart(fig_pie, use_container_width=True)
-                else:
-                    st.info("Sin gastos.")
+            with sub_gastos:
+                g_col1, g_col2 = st.columns([1, 1])
 
-            with g_col2:
-                st.markdown("#### 🏦 Gastos en Bancos (Mensual)")
-                df_bancos = df_filtered[(df_filtered["tipo"] == "gasto") & (df_filtered["categoria"].isin(["Bancos", "bancos"]))]
-                if not df_bancos.empty:
-                    df_bancos["periodo"] = df_bancos["fecha"].dt.strftime('%Y-%m')
-                    df_bancos_agg = df_bancos.groupby("periodo")["valor"].sum().reset_index()
-                    fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor",
-                                     title="Salidas categoría Bancos",
-                                     color_discrete_sequence=["#3498DB"])
-                    fig_banco.update_layout(margin=dict(t=30, b=0, l=0, r=0))
-                    st.plotly_chart(fig_banco, use_container_width=True)
-                else:
-                    st.info("No hay gastos registrados en 'Bancos'.")
+                with g_col1:
+                    st.markdown("#### 🍩 Gastos por Categoría")
+                    df_gas = df_filtered[df_filtered["tipo"] == "gasto"]
+                    if not df_gas.empty:
+                        fig_pie = px.pie(df_gas, values="valor", names="categoria", hole=0.4)
+                        fig_pie.update_layout(showlegend=False, margin=dict(t=30, b=0, l=0, r=0))
+                        st.plotly_chart(fig_pie, use_container_width=True)
+                    else:
+                        st.info("Sin gastos.")
 
-            st.divider()
+                with g_col2:
+                    st.markdown("#### 🏆 Top Gastos")
+                    df_gastos_all = df_filtered[df_filtered["tipo"] == "gasto"].copy()
+                    if not df_gastos_all.empty:
+                        df_ranking = df_gastos_all.groupby("categoria")["valor"].sum().reset_index().sort_values("valor", ascending=False)
+                        df_ranking["Total"] = df_ranking["valor"].apply(lambda x: f"${x:,.2f}")
+                        st.dataframe(
+                            df_ranking[["categoria", "Total"]],
+                            column_config={"categoria": "Categoría", "Total": "Monto Acumulado"},
+                            use_container_width=True, hide_index=True
+                        )
+                    else:
+                        st.info("Sin datos.")
 
-            g_col3, g_col4 = st.columns([2, 1])
+            with sub_tendencias:
+                g_col3, g_col4 = st.columns([2, 1])
 
-            with g_col3:
-                st.markdown("#### 📆 Tendencia Semanal")
-                df_gastos_all = df_filtered[df_filtered["tipo"] == "gasto"].copy()
-                if not df_gastos_all.empty:
-                    df_gastos_all["inicio_semana"] = df_gastos_all["fecha"].dt.to_period('W').dt.start_time
-                    df_semanal = df_gastos_all.groupby("inicio_semana")["valor"].sum().reset_index()
-                    fig_line = px.line(df_semanal, x="inicio_semana", y="valor", markers=True)
-                    fig_line.update_traces(line_color='#E74C3C', line_width=3)
-                    fig_line.update_layout(xaxis_title="Semana", yaxis_title="Total Gastado", margin=dict(t=10, b=0, l=0, r=0))
-                    st.plotly_chart(fig_line, use_container_width=True)
-                else:
-                    st.info("No hay datos.")
+                with g_col3:
+                    st.markdown("#### 📆 Tendencia Semanal")
+                    if not df_gastos_all.empty:
+                        df_gastos_all["inicio_semana"] = df_gastos_all["fecha"].dt.to_period('W').dt.start_time
+                        df_semanal = df_gastos_all.groupby("inicio_semana")["valor"].sum().reset_index()
+                        fig_line = px.line(df_semanal, x="inicio_semana", y="valor", markers=True)
+                        fig_line.update_traces(line_color='#E74C3C', line_width=3)
+                        fig_line.update_layout(xaxis_title="Semana", yaxis_title="Total Gastado", margin=dict(t=10, b=0, l=0, r=0))
+                        st.plotly_chart(fig_line, use_container_width=True)
+                    else:
+                        st.info("No hay datos.")
 
-            with g_col4:
-                st.markdown("#### 🏆 Top Gastos")
-                if not df_gastos_all.empty:
-                    df_ranking = df_gastos_all.groupby("categoria")["valor"].sum().reset_index().sort_values("valor", ascending=False)
-                    df_ranking["Total"] = df_ranking["valor"].apply(lambda x: f"${x:,.2f}")
-                    st.dataframe(
-                        df_ranking[["categoria", "Total"]],
-                        column_config={"categoria": "Categoría", "Total": "Monto Acumulado"},
-                        use_container_width=True, hide_index=True
-                    )
-                else:
-                    st.info("Sin datos.")
+                with g_col4:
+                    st.markdown("#### 🏦 Gastos en Bancos (Mensual)")
+                    df_bancos = df_filtered[(df_filtered["tipo"] == "gasto") & (df_filtered["categoria"].isin(["Bancos", "bancos"]))]
+                    if not df_bancos.empty:
+                        df_bancos["periodo"] = df_bancos["fecha"].dt.strftime('%Y-%m')
+                        df_bancos_agg = df_bancos.groupby("periodo")["valor"].sum().reset_index()
+                        fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor",
+                                         title="Salidas categoría Bancos",
+                                         color_discrete_sequence=["#3498DB"])
+                        fig_banco.update_layout(margin=dict(t=30, b=0, l=0, r=0))
+                        st.plotly_chart(fig_banco, use_container_width=True)
+                    else:
+                        st.info("No hay gastos registrados en 'Bancos'.")
 
-            st.divider()
-
-            g_col5, g_col6 = st.columns([1, 1])
-
-            with g_col5:
+            with sub_ingresos:
                 st.markdown("#### Ingresos (Mensual)")
-                df_bancos = df_filtered[(df_filtered["tipo"] == "ingreso")]
-                if not df_bancos.empty:
-                    df_bancos["periodo"] = df_bancos["fecha"].dt.strftime('%Y-%m')
-                    df_bancos_agg = df_bancos.groupby("periodo")["valor"].sum().reset_index()
-                    fig_banco = px.bar(df_bancos_agg, x="periodo", y="valor",
-                                     title="Salidas categoría Ingresos",
+                df_ing = df_filtered[(df_filtered["tipo"] == "ingreso")]
+                if not df_ing.empty:
+                    df_ing["periodo"] = df_ing["fecha"].dt.strftime('%Y-%m')
+                    df_ing_agg = df_ing.groupby("periodo")["valor"].sum().reset_index()
+                    fig_ing = px.bar(df_ing_agg, x="periodo", y="valor",
+                                     title="Entradas categoría Ingresos",
                                      color_discrete_sequence=["#3498DB"])
-                    fig_banco.update_layout(margin=dict(t=30, b=0, l=0, r=0))
-                    st.plotly_chart(fig_banco, use_container_width=True)
+                    fig_ing.update_layout(margin=dict(t=30, b=0, l=0, r=0))
+                    st.plotly_chart(fig_ing, use_container_width=True)
                 else:
                     st.info("No hay ingresos registrados.")
 
